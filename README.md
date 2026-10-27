@@ -41,38 +41,35 @@ Host 検査を通ってしまうので、画面上は「繋がっていないだ
 - したがって `DSH_HOME` をボリューム永続化すれば、トークン入力は初回の一度だけ。
   本構成は `/root` ごと `/volume1/docker/dsh/root` に永続化している。
 
-## どの端末からでも認証なしで使う（本構成の既定動作）
+## アクセス制御（本構成の既定）
 
-トークンを毎回コピーするのは面倒なので、**このイメージは認証済み cookie を
-自動で Caddy に注入する**。仕組みは `bootstrap.js`:
+**守りはネットワーク境界だけ**。LAN 内に置き、ルーターでポート転送をしない。
+その前提で、dsh のセッション cookie は**注入しない**。
 
-1. dsh の起動ログから `?token=...` を拾う（トークンが出た直後にだけ動く）。
-2. `DSH_HOME/.credentials.yaml` の署名鍵で、**期限 10000 年**のセッション cookie を
-   自分で生成する（dsh の `sessionCookie()` と同じ形式）。
-3. `Caddyfile` の `# ==== dsh bootstrap ====` 以降を書き換え、
-   `header_up Cookie "dsh-auth-...=v1...."` を入れる。
+以前は `bootstrap.js` が共有シークレットから署名 cookie を作って全リクエストに
+入れていた。これは「URL かシークレットを知っている人が全員通る」方式で、
+端末の識別も個別失効もできなかったため廃止した（経緯と代替案は
+[`docs/access-control.md`](docs/access-control.md)）。
 
-Caddy は設定ファイルの変更を自動リロードするので、**再起動のたびに新しい cookie が
-無停止で反映される**。ブラウザの cookie は不要で、どの端末・どのブラウザからも
-`http://nas:3080/` を開くだけでログイン画面を経ずに入れる。
+いまの `bootstrap.js` は `Caddyfile` の `# ==== dsh bootstrap ====` 以降を
+毎起動で書き換え、次の 2 行だけを入れる:
 
-**注意点**
+```
+header_up Host {http.request.hostport}
+header_up Cookie ""
+```
 
-- cookie の authority は `DSH_TRUSTED_HOST`（既定 `nas:3080`）で固定される。
-  `192.168.1.x:3080` など別の authority でアクセスすると Host 検査で 403 になる。
-  LAN の別名で使いたいときは `DSH_TRUSTED_HOST` にその authority を足し、
-  同じ端末で 1 度だけトークン URL を踏んで cookie を発行させること。
-- cookie は署名鍵が漏れれば誰でも偽造できる。LAN 内専用の前提を崩すなら
-  この注入を無効化し（Caddyfile から `header_up Cookie` 行を消す）、
-  トークン URL 運用に戻すこと。
+`Host` は trusted-host (`DSH_TRUSTED_HOST`, 既定 `nas:3080`) と一致させるため。
+`Cookie ""` はクライアントが古い `dsh-auth-*` を送ってきても落とすため
+（端末によって通る・通らないが分かれるのを防ぐ）。鍵は使わないので、
+`.credentials.yaml` が読めることだけ起動確認に使っている。
 
-注入に失敗しても dsh は動く（自動的にトークン URL 運用に戻るだけ）。
-失敗は `docker compose logs dsh | grep bootstrap` で確認する。
-
-初回トークンはホスト側で次を実行して取り出す:
+**別の authority で使いたいとき**は `DSH_TRUSTED_HOST` を変える
+（`192.168.1.x:3080` だと Host 検査で 403 になる）。
+初回アクセス時にトークンを求められた場合の取り出し方:
 
 ```sh
-docker compose logs dsh | grep -o 'http://[^ ]*token=[^ ]*'
+ docker compose logs dsh | grep -o 'http://[^ ]*token=[^ ]*'
 ```
 
 ## セットアップ

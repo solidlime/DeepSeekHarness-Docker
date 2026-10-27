@@ -58,18 +58,28 @@ function sessionCookie(authority, secret, now = Date.now()) {
 // トークンではなく cookie を注入する理由: トークン URL へのリダイレクト方式だと
 // （1）起動直後の注入では取りこぼす再起動がある、（2）Caddy の設定にトークンを
 // 書くことになり curl で 401 を expect している healthcheck が壊れる。
-function caddyfile(base, authority, cookie) {
+function caddyfile(base, authority) {
 	const head = base.split(MARKER)[0].trimEnd();
 	const site = `:${authority.split(':')[1] ?? '3080'}`;
+	// アクセス制御の方針（docs/access-control.md）:
+	// いつでも・どの端末からでも開ける運用はセッション cookie ではなく
+	// ネットワーク境界（LAN 限定・ポート転送なし）で守る。従来は共有
+	// シークレットから作った cookie を全リクエストに注入していたため、
+	// 「知っていれば誰でも通る」状態だった。cookie は trusted-host の
+	// 整合にしか寄与していなかったので、注入をやめてヘッダを落とす。
+	// 将来 パスキー/mTLS を入れる場合はこのブロックの前に差し込む。
 	const block = [
 		MARKER,
 		`# このセクションは bootstrap.js が起動のたびに書き換える（手で編集しない）。`,
-		`# 全リクエストに認証済み cookie を注入するので、どの端末でもトークン URL は不要。`,
-		`# 有効期限: ${new Date(cookie.expiresAt).toISOString()} (毎起動で更新)`,
+		`# 共有 cookie の注入はしない（docs/access-control.md 参照）。`,
+		`# 守りは LAN 限定。パスキー/mTLS を入れるならこのブロックの前に差し込む。`,
 		site + ' {',
 		'\treverse_proxy 127.0.0.1:3081 {',
 		'\t\theader_up Host {http.request.hostport}',
-		`\t\theader_up Cookie "${cookie.name}=${cookie.value}"`,
+		// クライアントが dsh-auth-* cookie を送ってきても通さない。
+		// 落とさないと、古い cookie を持つ端末だけが通る（または蹴られる）
+		// という分かりにくい差が出る。
+		'\t\theader_up Cookie ""',
 		'\t}',
 		'}',
 		'',
@@ -103,8 +113,11 @@ function selftest() {
 	}
 	assert.strictEqual(payload.authority, 'nas:3080');
 	assert.strictEqual(payload.expiresAt - payload.issuedAt, COOKIE_TTL_MS);
-	const cf = caddyfile('{"apps":{}}\n' + MARKER + '\n:3080 {\n\tfile_server\n}\n', 'nas:3080', c);
-	assert.ok(cf.includes(`header_up Cookie "${c.name}=${c.value}"`));
+	const cf = caddyfile('{"apps":{}}\n' + MARKER + '\n:3080 {\n\tfile_server\n}\n', 'nas:3080');
+	// 共有 cookie は注入しない（docs/access-control.md）。クライアントの cookie は落とす。
+	assert.ok(cf.includes('header_up Cookie ""'), 'client cookies must be dropped');
+	assert.ok(!cf.includes('dsh-auth-'), 'no shared auth cookie may be injected');
+	assert.ok(cf.includes('header_up Host {http.request.hostport}'));
 	assert.strictEqual(cf.split(MARKER).length, 2, 'marker must appear once');
 	console.log('selftest ok');
 }
@@ -126,9 +139,12 @@ function reloadCaddy() {
 
 function inject(authority, credentialsPath) {
 	const cookie = sessionCookie(authority, readSecret(credentialsPath));
-	writeCaddyfile(caddyfile(readFileSync(CADDYFILE_IN, 'utf8'), authority, cookie));
+	// 秘密鍵が読めること（= dsh が初期化済み）を確かめてから切り替える。
+	// cookie 自体はもう送らないが、credentials がまだ無い初回起動を弾くのに使う。
+	void cookie;
+	writeCaddyfile(caddyfile(readFileSync(CADDYFILE_IN, 'utf8'), authority));
 	reloadCaddy();
-	console.log(`bootstrap: injected session cookie for ${authority} (expires ${new Date(cookie.expiresAt).toISOString()})`);
+	console.log(`bootstrap: configured ${authority} without a shared auth cookie (LAN boundary only)`);
 }
 
 const authority = process.env.DSH_TRUSTED_HOST || 'nas:3080';
