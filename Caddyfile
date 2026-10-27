@@ -2,8 +2,13 @@
 # dsh は Host の authority を --trusted-host と照合するため、
 # クライアント本来の Host を header_up で保持したまま転送する。
 # これが無いと Host が 127.0.0.1:3081 になり dsh 側で拒否される。
+#
+# ポートを落とさないこと。Caddy の `{host}` は hostname だけを返すので、
+# `header_up Host {host}` だと dsh に `nas` が届き、trusted host の
+# `nas:3080` と一致せず WebSocket (/api/remote.mux) が 403 になる。
+# 症状は UI の「Reconnecting...」とプラグイン一覧の読み込み失敗。
 :3080 {
 	reverse_proxy 127.0.0.1:3081 {
-		header_up Host {host}
+		header_up Host {http.request.hostport}
 	}
 }

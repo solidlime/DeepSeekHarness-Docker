@@ -11,11 +11,18 @@ dsh 本体はループバックにしかバインドできない設計なので�
 | 層 | 挙動 |
 | --- | --- |
 | dsh (`--profile web`) | `--host 0.0.0.0` は**明示的に拒否される**（RCE 露出防止の設計）。使えるのは 127.0.0.1 バインドのみ → コンテナ内 `127.0.0.1:3081` |
-| Caddy | `:3080`（= 0.0.0.0）で受け、`127.0.0.1:3081` へ reverse_proxy。`header_up Host {host}` でクライアントの Host を保持して転送 |
+| Caddy | `:3080`（= 0.0.0.0）で受け、`127.0.0.1:3081` へ reverse_proxy。`header_up Host {http.request.hostport}` でクライアントの Host を**ポート込みで**保持して転送 |
 | dsh の Host 検証 | `--trusted-host <authority>` に一致する Host だけ受け付ける。既定は `nas:3080`（`DSH_TRUSTED_HOST` で変更可） |
 
-Caddy の `header_up Host {host}` が無いと、Host が `127.0.0.1:3081` になって
+Caddy の `header_up Host` が無いと、Host が `127.0.0.1:3081` になって
 dsh の `--trusted-host` 検証に落ちる。必ず残すこと。
+
+**`{host}` ではなく `{http.request.hostport}` を使うこと。** Caddy の `{host}` は
+ポートを落とすので、`header_up Host {host}` だと dsh には `nas` が届き、
+trusted host の `nas:3080` と一致しない。症状は UI の「Reconnecting...」と
+プラグイン一覧の「Could not read all plugins, possibly due to a network problem」
+（WebSocket `/api/remote.mux` が 403）。ドキュメント本体とクッキー発行は
+Host 検査を通ってしまうので、画面上は「繋がっていないだけ」に見えるのが厄介。
 
 ## トークンとクッキーの挙動（実測済み）
 
@@ -75,9 +82,12 @@ dsh 本体のバージョンを上げる場合は `package.json` の
 
 - **amd64 のみ**を想定。node-pty の prebuilt と本イメージの検証は amd64 で行った。
 - 複数の authority（例: `nas:3080` と `192.168.1.10:3080` の両方）を許可したい
-  場合、`DSH_TRUSTED_HOST` にカンマ区切りで渡しても効かない。
-  `docker-entrypoint.sh` の `dsh` 呼び出しに `--trusted-host` を増やすか、
-  Caddy 側で `header_up Host` を単一の authority に固定して対応する。
+  場合、`DSH_TRUSTED_HOST` にカンマ区切りで渡しても効かない（`--trusted-host` の
+  1引数として扱われ、`is not a bare host[:port] authority` で起動時に落ちる）。
+  `docker-entrypoint.sh` の `dsh` 呼び出しに `--trusted-host` を増やすこと。
+- `--trusted-host` に載っていない authority でアクセスすると、ドキュメントは
+  返るが API が 403 になる（例: IP 直アクセス `http://192.168.1.10:3080/`）。
+  ホスト名を固定して使うか、上記の通り `--trusted-host` に追加する。
 - dsh は 127.0.0.1 バインド専用なので、コンテナ内ヘルスチェックは Caddy 経由
   (`127.0.0.1:3080`) で行う。Host ヘッダを明示している。
 
