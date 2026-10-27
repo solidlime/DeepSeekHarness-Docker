@@ -6,6 +6,11 @@ dsh 本体はループバックにしかバインドできない設計なので�
 (:3080) を受け持つ。`docker compose up -d` だけで常駐し、再起動しても
 初回ログインのクッキーが生き続ける。
 
+**dsh はイメージに焼かず、初回起動時に永続ボリュームへインストールする。**
+これをやるとイメージが数十 MB に収まり、pull とビルドが一桁秒で終わる。
+インストール先は `$DSH_HOME/runtime`（= `/root/.dsh/runtime`）で、`/root` ごと
+永続化しているので**コンテナを作り直しても npm install は走らない**。
+
 ## 外部アクセスの仕組み
 
 | 層 | 挙動 |
@@ -13,6 +18,7 @@ dsh 本体はループバックにしかバインドできない設計なので�
 | dsh (`--profile web`) | `--host 0.0.0.0` は**明示的に拒否される**（RCE 露出防止の設計）。使えるのは 127.0.0.1 バインドのみ → コンテナ内 `127.0.0.1:3081` |
 | Caddy | `:3080`（= 0.0.0.0）で受け、`127.0.0.1:3081` へ reverse_proxy。`header_up Host {http.request.hostport}` でクライアントの Host を**ポート込みで**保持して転送 |
 | bootstrap.js | dsh を起動し、起動トークンを拾って**認証済み cookie を Caddy に注入**する（後述） |
+| docker-entrypoint.sh | 初回だけ `$DSH_HOME/runtime` へ `npm install`。manifest の sha256 を保存し、`package.json` が変わったか `DSH_RUNTIME_REFRESH=1` のときだけ入れ直す |
 | dsh の Host 検証 | `--trusted-host <authority>` に一致する Host だけ受け付ける。既定は `nas:3080`（`DSH_TRUSTED_HOST` で変更可） |
 
 Caddy の `header_up Host` が無いと、Host が `127.0.0.1:3081` になって
@@ -91,6 +97,10 @@ docker compose up -d
   あると dsh のインストールが `npm error invariant` で壊れる。本リポジトリは
   `.npmrc` を作らず、Docker ビルド時も COPY しない。
 - **`npm install -g @deepseek-ai/dsh` は使うな。** peer 依存の解決に失敗する。
+  起動時インストールもローカルの `package.json` を `$DSH_RUNTIME` に置いて
+  hoisted で入れる方式にしている。
+- **dsh を更新したいときは `DSH_RUNTIME_REFRESH=1`。** `latest` は初回の
+  インストール時にしか解決されない（再起動では変わらない）。
   ローカルインストール（`package.json` + `allowScripts`）で組む。
   `allowScripts` を落とすと postinstall が走らず PTY が壊れる。
 - node-pty は prebuilt で PTY が動く（ネイティブビルド不要）。`python3` は
@@ -99,13 +109,18 @@ docker compose up -d
 
 ## 更新
 
+dsh 本体は起動時に永続ボリュームへ入るので、**イメージの更新と dsh の更新は別**。
+
 ```sh
+# イメージ（Caddy・Node・起動スクリプト）だけ更新。数秒で終わる。
 docker compose pull && docker compose up -d
+
+# ついでに dsh 本体も最新へ（初回と同じく数分の npm install が走る）
+DSH_RUNTIME_REFRESH=1 docker compose up -d --force-recreate
 ```
 
-dsh 本体のバージョンを上げる場合は `package.json` の
-`"@deepseek-ai/dsh"` を書き換えてイメージをビルドし直す
-（Dockerfile の `ARG DSH_VERSION` と CI の smoke test の期待値も合わせる）。
+`DSH_RUNTIME_REFRESH=1` は一度きりなので、終わったら `0` に戻す
+（`.env` に入れると毎回インストールしてしまう）。
 
 ## 既知の制約
 

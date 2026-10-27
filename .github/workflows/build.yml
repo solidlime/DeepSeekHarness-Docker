@@ -50,20 +50,20 @@ jobs:
             "$IMAGE:sha-$SHA_TAG" -s <<'SH'
           set -eu
 
-          echo "== dsh --version =="
-          # 期待値はイメージ内の package.json（インストールされた実バージョン）から取る。
-          # バージョンは意図的に固定していない（npm の dist-tag `latest` に追従）ので、
-          # CI 側でバージョン番号を二重管理しない。
-          expected=$(node -p \
-            "require('/opt/dsh/node_modules/@deepseek-ai/dsh/package.json').version")
-          echo "expected=$expected"
-          out=$(dsh --version 2>&1)
-          echo "$out"
-          echo "$out" | grep -qF "$expected"
+          echo "== イメージに dsh を焼いていない =="
+          # dsh は起動時に永続ボリュームへ入れる設計。イメージに node_modules が
+          # 残っていたら pull が遅くなるので、ここで退行を止める。
+          ! command -v dsh
+          test ! -d /opt/dsh/node_modules
 
-          echo "== Caddyfile =="
-          test -f /etc/caddy/Caddyfile
-          grep -q "header_up Host" /etc/caddy/Caddyfile
+          echo "== bootstrap.js の自己検証 =="
+          # トークン抽出・cookie 生成・Caddyfile 書き換えを実物のコードで確認する。
+          DSH_BOOTSTRAP_SELFTEST=1 node /usr/local/bin/bootstrap.js
+
+          echo "== Caddyfile の種 =="
+          test -f /etc/caddy/Caddyfile.dsh
+          grep -q 'header_up Host {http.request.hostport}' \
+            /etc/caddy/Caddyfile.dsh
 
           echo "== entrypoint syntax =="
           sh -n /usr/local/bin/docker-entrypoint.sh

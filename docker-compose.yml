@@ -14,6 +14,10 @@ services:
     environment:
       TZ: Asia/Tokyo
       DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-nas:3080}
+      # dsh 本体はイメージに入っていない。初回起動時に $DSH_HOME/runtime へ
+      # npm install し、以降は永続ボリュームのそれを使い回す。
+      # 手元の dsh を最新にしたいときだけ 1 を入れて作り直す（数分かかる）。
+      DSH_RUNTIME_REFRESH: ${DSH_RUNTIME_REFRESH:-0}
     healthcheck:
       # dsh は 127.0.0.1 bind なので、コンテナ内から Caddy 経由で叩く。
       # cookie 注入前は 401、注入後は 200。どちらも「待ち受けている」証拠なので
@@ -27,4 +31,5 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      # 初回起動は npm install が走るので長めに取る（2回目以降は数秒）。
+      start_period: 600s

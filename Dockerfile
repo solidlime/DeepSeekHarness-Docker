@@ -1,10 +1,16 @@
 FROM node:24-bookworm-slim
 
-# dsh のバージョンは固定しない。package.json が dist-tag `latest` を指し、
-# ビルドのたびに npm レジストリの最新を解決する（更新は再ビルド＝CI で入る）。
+# このイメージは「実行環境」だけを持つ。dsh 本体は入れない。
+#
+# なぜか: dsh の node_modules が数百 MB あり、毎回の pull が遅い。
+# 代わりに初回起動時に永続ボリューム側 ($DSH_HOME/runtime) へ npm install し、
+# 以降のコンテナ再作成ではインストールをスキップする。更新したいときだけ
+# DSH_RUNTIME_REFRESH=1 で作り直す（README 参照）。
+#
+# イメージが小さくなるので、CI のビルドも pull も数秒で終わる。
 
-# python3/make/g++: node-pty 等のビルド保険（prebuilt が使えなかった場合に備える）
-# ca-certificates/curl: Caddy リポジトリ取得用
+# python3/make/g++: node-pty / koffi 等の prebuilt が使えなかった場合のビルド保険
+# ca-certificates/curl/gnupg: Caddy リポジトリ取得と npm の TLS 用
 # tini: PID 1 としてゾンビ回収とシグナル転送を行う
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -20,22 +26,21 @@ RUN curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
  && apt-get install -y --no-install-recommends caddy \
  && rm -rf /var/lib/apt/lists/*
 
-# dsh は peer 依存の解決に失敗するため npm install -g は使わない。
-# ローカルの package.json + allowScripts でインストールする。
-# .npmrc は作らない・持ち込まない（legacy-peer-deps / global-style があると install が壊れる）。
-WORKDIR /opt/dsh
-COPY package.json /opt/dsh/package.json
-RUN npm install --install-strategy=hoisted --no-legacy-peer-deps --no-fund --no-audit
-
-RUN ln -s /opt/dsh/node_modules/.bin/dsh /usr/local/bin/dsh \
- && node -p "'dsh runtime: ' + require('/opt/dsh/node_modules/@deepseek-ai/dsh/package.json').version"
-
 ENV DSH_HOME=/root/.dsh
+# 起動時インストールの実体。$DSH_HOME 配下なので /root を永続化すれば残る。
+ENV DSH_RUNTIME=/root/.dsh/runtime
+
+# インストール手順を固定するための manifest。イメージにはこれだけ置き、
+# 依存の実体は起動時に $DSH_RUNTIME へ入れる。
+# .npmrc は作らない・持ち込まない（legacy-peer-deps / global-style があると install が壊れる）。
+COPY package.json /opt/dsh/package.json
 
 # dsh の作業ディレクトリ。/root ごとボリューム永続化する前提。
 WORKDIR /root/workspace
 
-COPY Caddyfile /etc/caddy/Caddyfile
+# Caddyfile は「種」として置く。実体の /etc/caddy/Caddyfile は起動のたびに
+# entrypoint が種から作り、bootstrap.js が cookie 行を足す。
+COPY Caddyfile /etc/caddy/Caddyfile.dsh
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY bootstrap.js /usr/local/bin/bootstrap.js
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
