@@ -16,7 +16,10 @@ const { createHash, createHmac } = require('node:crypto');
 const CADDYFILE = '/etc/caddy/Caddyfile';
 const CADDYFILE_IN = '/etc/caddy/Caddyfile.dsh';
 const MARKER = '# ==== dsh bootstrap ====';
-const COOKIE_TTL_MS = 10000 * 365 * 24 * 60 * 60 * 1000; // 10000 年
+// dsh は expiresAt - issuedAt が maxAgeMilliseconds（既定 30 日）を超えると
+// その cookie を検証エラーで捨てる（decodeCookie の後の期間チェック）。
+// 起動のたびに作り直すので、1回の寿命は 30 日未満なら十分。
+const COOKIE_TTL_MS = 29 * 24 * 60 * 60 * 1000;
 
 // 「The Web UI is available at http://nas:3080/?token=xxx」からトークンを取り出す。
 function parseLaunchToken(text) {
@@ -29,7 +32,14 @@ function readSecret(credentialsPath) {
 	const section = raw.slice(raw.indexOf('browser-session:'));
 	const m = section.match(/secret:\s*([A-Za-z0-9_+/=-]+)/);
 	if (m === null) throw new Error('browser-session secret not found');
-	return Buffer.from(m[1], 'base64');
+	// dsh は secret を base64url で保存し、デコードした 32 バイトを HMAC 鍵にする
+	// (canonicalSecret)。'base64' でデコードすると '-' と '_' が黙って捨てられて
+	// 鍵が変わり、生成した cookie が dsh に 401 で蹴られる。
+	const secret = Buffer.from(m[1], 'base64url');
+	if (secret.byteLength !== 32) {
+		throw new Error(`browser-session secret is ${secret.byteLength} bytes, expected 32`);
+	}
+	return secret;
 }
 
 // dsh の sessionCookie() と同じ形式。payload は JSON の base64url、
@@ -55,7 +65,7 @@ function caddyfile(base, authority, cookie) {
 		MARKER,
 		`# このセクションは bootstrap.js が起動のたびに書き換える（手で編集しない）。`,
 		`# 全リクエストに認証済み cookie を注入するので、どの端末でもトークン URL は不要。`,
-		`# 有効期限: ${new Date(cookie.expiresAt).toISOString()} (10000 年)`,
+		`# 有効期限: ${new Date(cookie.expiresAt).toISOString()} (毎起動で更新)`,
 		site + ' {',
 		'\treverse_proxy 127.0.0.1:3081 {',
 		'\t\theader_up Host {http.request.hostport}',
@@ -78,6 +88,10 @@ function selftest() {
 	assert.strictEqual(tok, 'Ab3dEf6gHi9jKl');
 	assert.strictEqual(parseLaunchToken('no url here'), undefined);
 	const secret = Buffer.alloc(32, 7);
+	// credentials.yaml の secret は base64url。往復して元の 32 バイトに戻ることを見る。
+	assert.strictEqual(
+		Buffer.from(secret.toString('base64url'), 'base64url').equals(secret), true,
+	);
 	const c = sessionCookie('nas:3080', secret, 1000);
 	assert.match(c.name, /^dsh-auth-[A-Za-z0-9_-]{43}$/);
 	assert.match(c.value, /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/);
