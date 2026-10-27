@@ -19,10 +19,11 @@ const MARKER = '# ==== dsh bootstrap ====';
 // dsh は expiresAt - issuedAt が maxAgeMilliseconds（既定 30 日）を超えると
 // その cookie を検証エラーで捨てる（decodeCookie の後の期間チェック）。
 // 起動のたびに作り直すので、1回の寿命は 30 日未満なら十分。
-// 29 日だと、その間にコンテナを再起動しなければ全端末 401 になる（healthcheck は
-// 401 を正常扱いにしているので誰も気づかない）。LAN 内専用でドメインを跨がない
-// cookie なので、事実上の無期限にしてよい。再起動のたびに作り直される。
-const COOKIE_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+// dsh は cookie の expiresAt が **発行から 30 日以内** でないと検証で弾く（実測：
+// 29 日 200 / 30 日 200 / 31 日 401）。だから TTL を延ばしては駄目。
+// 30 日経つと全端末 401 になるので、起動時以外にも定期的に入れ直す。
+const COOKIE_TTL_MS = 29 * 24 * 60 * 60 * 1000;
+const REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 // 「The Web UI is available at http://nas:3080/?token=xxx」からトークンを取り出す。
 function parseLaunchToken(text) {
@@ -149,6 +150,14 @@ let patched = false;
 try {
 	inject(authority, credentialsPath);
 	patched = true;
+	// 30 日で切れるので定期的に入れ直す。再起動なしで 30 日を跨ぐと全端末 401 になる。
+	setInterval(() => {
+		try {
+			inject(authority, credentialsPath);
+		} catch (err) {
+			console.error('bootstrap: periodic refresh failed:', err.message);
+		}
+	}, REFRESH_MS).unref();
 } catch (err) {
 	// 初回起動はここに来る（dsh が credentials.yaml を作る前）。下の watch で拾う。
 	console.error(`bootstrap: pre-injection skipped: ${err.message}`);
