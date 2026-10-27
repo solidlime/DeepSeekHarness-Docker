@@ -122,6 +122,22 @@ DSH_RUNTIME_REFRESH=1 docker compose up -d --force-recreate
 `DSH_RUNTIME_REFRESH=1` は一度きりなので、終わったら `0` に戻す
 （`.env` に入れると毎回インストールしてしまう）。
 
+## エージェントプリセット（人格の移植）
+
+`dsh/presets/` をイメージに焼き込み、**初回起動時にだけ** profile と `$DSH_HOME` へ配る。
+
+| 焼き込み先 | 配り先 | 中身 |
+| --- | --- | --- |
+| `dsh/presets/cordis.patch.yml` | `$DSH_HOME/profiles/web/cordis.patch.yml` | 8 体の preset（ヘルタ・人形#001/#002/#009/#011/#042/#057・ルアン・メェイ） |
+| `dsh/presets/AGENTS.md` | `$DSH_HOME/AGENTS.md` | 運用ルールのみ（人格は preset 側の `persona.prefix`） |
+
+既にファイルがあれば**触らない**（ユーザーが UI から足したプラグイン設定を潰さないため）。
+入れ直すときは `DSH_PROFILE_RESET=1` で起動する。
+
+- preset は `cordis.patch.yml` の**トップレベル配列のエントリ**として書く。
+  `presets:` のような専用キーは存在せず、書いても静かに無視される（実測）。
+- 人格は `persona.prefix` に入れる。`AGENTS.md` に人格を書くと preset 切り替えと二重になる。
+
 ## 既知の制約
 
 - **amd64 のみ**を想定。node-pty の prebuilt と本イメージの検証は amd64 で行った。
