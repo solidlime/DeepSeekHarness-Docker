@@ -97,3 +97,18 @@ jobs:
         run: |
           docker push "$IMAGE:latest"
           docker push "$IMAGE:sha-$SHA_TAG"
+
+      # GHCR のパッケージ可視性はリポジトリと別管理。private のままだと
+      # Portainer が匿名 pull できず NAS の compose pull が 403 になる。
+      - name: Make package public
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          api=https://api.github.com/user/packages/container
+          curl -sS -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"visibility":"public"}' \
+            "$api/deepseek-harness-container" \
+            | head -c 400
