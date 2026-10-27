@@ -76,19 +76,35 @@ jobs:
             *) echo "not executable: $perm" >&2; exit 1 ;;
           esac
 
-          echo "== credentials.yaml chmod simulation =="
-          # bind mount は umask 0022 で 755 になる。entrypoint の実物から
-          # chmod 行を抜き出して実行し、600 になることを確認する。
-          # （行が消えたら grep が空になりここで落ちる）
+          echo "== credentials.yaml chmod + refs 登録 =="
+          # bind mount は umask 0022 で 755 になる。entrypoint の実物を
+          # 実行して、chmod と DSH_LITELLM_KEY の refs 登録を確かめる。
           mkdir -p "$DSH_HOME"
-          printf 'dummy: value\n' > "$DSH_HOME/.credentials.yaml"
+          printf 'version: 1\n' > "$DSH_HOME/.credentials.yaml"
           chmod 755 "$DSH_HOME/.credentials.yaml"
-          test "$(stat -c %a "$DSH_HOME/.credentials.yaml")" = "755"
-          line=$(grep -F 'chmod 600 "$DSH_HOME/.credentials.yaml"' \
-            /usr/local/bin/docker-entrypoint.sh)
-          test -n "$line"
-          eval "$line"
+          # --dry-run 相当は無いので、entrypoint から該当ブロックを抜いて
+          # 本物のスクリプトとして実行する。
+          sed -n '/^CRED="\$DSH_HOME/,/^fi$/p' \
+            /usr/local/bin/docker-entrypoint.sh > /tmp/cred-block.sh
+          test -s /tmp/cred-block.sh
+          DSH_HOME="$DSH_HOME" DSH_LITELLM_KEY=sk-test-1234 \
+            sh /tmp/cred-block.sh
           test "$(stat -c %a "$DSH_HOME/.credentials.yaml")" = "600"
+          grep -q '^  DSH_LITELLM_KEY: sk-test-1234$' \
+            "$DSH_HOME/.credentials.yaml"
+          # 冪等: 2 回目でも 1 行のまま
+          DSH_HOME="$DSH_HOME" DSH_LITELLM_KEY=sk-test-1234 \
+            sh /tmp/cred-block.sh
+          n=$(grep -c 'DSH_LITELLM_KEY' "$DSH_HOME/.credentials.yaml")
+          test "$n" = "1"
+          # 既存 refs: へ追記する形も壊れていないこと
+          printf 'version: 1\nrefs:\n  OTHER: x\n' \
+            > "$DSH_HOME/.credentials.yaml"
+          DSH_HOME="$DSH_HOME" DSH_LITELLM_KEY=sk-test-1234 \
+            sh /tmp/cred-block.sh
+          grep -q '^  OTHER: x$' "$DSH_HOME/.credentials.yaml"
+          grep -q '^  DSH_LITELLM_KEY: sk-test-1234$' \
+            "$DSH_HOME/.credentials.yaml"
           echo "mode=$(stat -c %a "$DSH_HOME/.credentials.yaml")"
 
           echo "smoke test passed"
