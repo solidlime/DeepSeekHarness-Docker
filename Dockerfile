@@ -37,6 +37,7 @@ WORKDIR /root/workspace
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY bootstrap.js /opt/dsh/bootstrap.js
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3080

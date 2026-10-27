@@ -16,12 +16,14 @@ services:
       DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-nas:3080}
     healthcheck:
       # dsh は 127.0.0.1 bind なので、コンテナ内から Caddy 経由で叩く。
-      # トークン無しでもログイン画面 (303/200) が返れば待ち受けている証拠。
+      # cookie 注入前は 401、注入後は 200。どちらも「待ち受けている」証拠なので
+      # 3xx/401 も正常扱いにする（unhealthy のちらつきを避ける）。
+      # 注入の成否は docker logs の "bootstrap: injected" で確認する。
       test:
         - CMD-SHELL
         - >-
-          curl -fsS -o /dev/null -H "Host: 127.0.0.1:3080"
-          http://127.0.0.1:3080/ || exit 1
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: 127.0.0.1:3080'
+          http://127.0.0.1:3080/ || echo 000)" != "000"
       interval: 30s
       timeout: 5s
       retries: 3

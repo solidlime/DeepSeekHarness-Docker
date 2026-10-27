@@ -12,6 +12,7 @@ dsh 本体はループバックにしかバインドできない設計なので�
 | --- | --- |
 | dsh (`--profile web`) | `--host 0.0.0.0` は**明示的に拒否される**（RCE 露出防止の設計）。使えるのは 127.0.0.1 バインドのみ → コンテナ内 `127.0.0.1:3081` |
 | Caddy | `:3080`（= 0.0.0.0）で受け、`127.0.0.1:3081` へ reverse_proxy。`header_up Host {http.request.hostport}` でクライアントの Host を**ポート込みで**保持して転送 |
+| bootstrap.js | dsh を起動し、起動トークンを拾って**認証済み cookie を Caddy に注入**する（後述） |
 | dsh の Host 検証 | `--trusted-host <authority>` に一致する Host だけ受け付ける。既定は `nas:3080`（`DSH_TRUSTED_HOST` で変更可） |
 
 Caddy の `header_up Host` が無いと、Host が `127.0.0.1:3081` になって
@@ -33,6 +34,34 @@ Host 検査を通ってしまうので、画面上は「繋がっていないだ
   旧クッキーは有効**（実測: 新しいトークン発行後も旧クッキーで 200）。
 - したがって `DSH_HOME` をボリューム永続化すれば、トークン入力は初回の一度だけ。
   本構成は `/root` ごと `/volume1/docker/dsh/root` に永続化している。
+
+## どの端末からでも認証なしで使う（本構成の既定動作）
+
+トークンを毎回コピーするのは面倒なので、**このイメージは認証済み cookie を
+自動で Caddy に注入する**。仕組みは `bootstrap.js`:
+
+1. dsh の起動ログから `?token=...` を拾う（トークンが出た直後にだけ動く）。
+2. `DSH_HOME/.credentials.yaml` の署名鍵で、**期限 10000 年**のセッション cookie を
+   自分で生成する（dsh の `sessionCookie()` と同じ形式）。
+3. `Caddyfile` の `# ==== dsh bootstrap ====` 以降を書き換え、
+   `header_up Cookie "dsh-auth-...=v1...."` を入れる。
+
+Caddy は設定ファイルの変更を自動リロードするので、**再起動のたびに新しい cookie が
+無停止で反映される**。ブラウザの cookie は不要で、どの端末・どのブラウザからも
+`http://nas:3080/` を開くだけでログイン画面を経ずに入れる。
+
+**注意点**
+
+- cookie の authority は `DSH_TRUSTED_HOST`（既定 `nas:3080`）で固定される。
+  `192.168.1.x:3080` など別の authority でアクセスすると Host 検査で 403 になる。
+  LAN の別名で使いたいときは `DSH_TRUSTED_HOST` にその authority を足し、
+  同じ端末で 1 度だけトークン URL を踏んで cookie を発行させること。
+- cookie は署名鍵が漏れれば誰でも偽造できる。LAN 内専用の前提を崩すなら
+  この注入を無効化し（Caddyfile から `header_up Cookie` 行を消す）、
+  トークン URL 運用に戻すこと。
+
+注入に失敗しても dsh は動く（自動的にトークン URL 運用に戻るだけ）。
+失敗は `docker compose logs dsh | grep bootstrap` で確認する。
 
 初回トークンはホスト側で次を実行して取り出す:
 

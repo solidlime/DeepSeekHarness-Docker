@@ -1,12 +1,16 @@
 # 外部 (:3080) で受け、dsh の 127.0.0.1:3081 へ中継する。
-# dsh は Host の authority を --trusted-host と照合するため、
-# クライアント本来の Host を header_up で保持したまま転送する。
-# これが無いと Host が 127.0.0.1:3081 になり dsh 側で拒否される。
+#
+# このファイルの「# ====」マーカーより下は bootstrap.js が起動のたびに
+# 書き換える（認証済み cookie の注入）。手で編集しないこと。
+# 上の部分（このコメント）はそのまま残る。
 #
 # ポートを落とさないこと。Caddy の `{host}` は hostname だけを返すので、
 # `header_up Host {host}` だと dsh に `nas` が届き、trusted host の
 # `nas:3080` と一致せず WebSocket (/api/remote.mux) が 403 になる。
 # 症状は UI の「Reconnecting...」とプラグイン一覧の読み込み失敗。
+
+# ==== dsh bootstrap ====
+# このセクションは bootstrap.js が起動のたびに書き換える（手で編集しない）。
 :3080 {
 	reverse_proxy 127.0.0.1:3081 {
 		header_up Host {http.request.hostport}
