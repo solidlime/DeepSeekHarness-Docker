@@ -135,6 +135,26 @@ DSH_RUNTIME_REFRESH=1 docker compose up -d --force-recreate
   `presets:` のような専用キーは存在せず、書いても静かに無視される（実測）。
 - 人格は `persona.prefix` に入れる。`AGENTS.md` に人格を書くと preset 切り替えと二重になる。
 
+### ds-bot のボットへ人格を配る（`scripts/sync-bots.js`）
+
+ds-bot の各ボットは**作成時の `instructions` を固定で持ち、preset とは連動しない**。
+そのため pi 側の人格を変えても ds-bot には伝わらない。`scripts/sync-bots.js` が橋渡しをする。
+
+```sh
+# コンテナ内で実行（persona は pi 側の AGENTS.md を置いておく）
+docker cp ~/.agents/AGENTS.md dsh:/root/.dsh/source/persona/AGENTS.md
+docker exec dsh node /root/.dsh/source/sync-bots.js           # 差分表示だけ
+docker exec dsh node /root/.dsh/source/sync-bots.js --apply   # 書き込む
+```
+
+- 出来上がる `instructions` は **`AGENTS.md`（ペルソナ本体）+ preset の `persona.prefix`（役割差分）**。
+  人格は 1 か所（pi 側の `~/.agents/AGENTS.md`）で管理し、ds-bot はそれを受け取るだけになる。
+- ボット名から preset を引く（`Herta` → `herta`、`人形#009（探索）` → `herta-009`、`ルアン・メェイ` → `ruan-mei`）。
+  **名前は変えない**ので、何度流しても同じ結果になる（冪等）。
+- cookie は `.credentials.yaml` のブラウザセッション鍵から自分で作る。
+  ポートに閉じた API（`127.0.0.1:3081`）を叩くだけなので、外に資格情報を出さない。
+- ボットを**新規作成**したときは、先に preset 名で作っておけば次回の同期で拾われる。
+
 ## モデル（LiteLLM ゲートウェイ）
 
 dsh のモデルは、 NAS で動いている LiteLLM（`nas:4000`）に相乗りする。
