@@ -19,7 +19,10 @@ const MARKER = '# ==== dsh bootstrap ====';
 // dsh は expiresAt - issuedAt が maxAgeMilliseconds（既定 30 日）を超えると
 // その cookie を検証エラーで捨てる（decodeCookie の後の期間チェック）。
 // 起動のたびに作り直すので、1回の寿命は 30 日未満なら十分。
-const COOKIE_TTL_MS = 29 * 24 * 60 * 60 * 1000;
+// 29 日だと、その間にコンテナを再起動しなければ全端末 401 になる（healthcheck は
+// 401 を正常扱いにしているので誰も気づかない）。LAN 内専用でドメインを跨がない
+// cookie なので、事実上の無期限にしてよい。再起動のたびに作り直される。
+const COOKIE_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000;
 
 // 「The Web UI is available at http://nas:3080/?token=xxx」からトークンを取り出す。
 function parseLaunchToken(text) {
