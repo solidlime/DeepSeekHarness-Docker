@@ -1,0 +1,99 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/solidlime/deepseek-harness-container
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute tags
+        id: meta
+        run: |
+          echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        env:
+          SHA_TAG: ${{ steps.meta.outputs.sha }}
+        run: |
+          docker build \
+            -t "$IMAGE:latest" \
+            -t "$IMAGE:sha-$SHA_TAG" \
+            .
+
+      # buildx は使わない。buildx の既定ドライバではビルド結果がローカル
+      # daemon のイメージ一覧に入らないため、直後の smoke test で
+      # docker run できない。ローカル daemon に載せて確実に叩く。
+      - name: Smoke test
+        env:
+          SHA_TAG: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -eu
+          docker run --rm -i \
+            --entrypoint sh \
+            "$IMAGE:sha-$SHA_TAG" -s <<'SH'
+          set -eu
+
+          echo "== dsh --version =="
+          # DSH_VERSION はイメージの ENV（Dockerfile の ARG 由来）。
+          # 出力形式（"dsh/0.2.0-rc.2" 等）は揺れるため、指定版が含まれる
+          # ことをもって一致とみなす。stderr に出る実装も吸収する。
+          out=$(dsh --version 2>&1)
+          echo "$out"
+          echo "$out" | grep -qF "$DSH_VERSION"
+
+          echo "== Caddyfile =="
+          test -f /etc/caddy/Caddyfile
+          grep -q "header_up Host" /etc/caddy/Caddyfile
+
+          echo "== entrypoint syntax =="
+          sh -n /usr/local/bin/docker-entrypoint.sh
+
+          echo "== entrypoint exec bit =="
+          perm=$(stat -c %a /usr/local/bin/docker-entrypoint.sh)
+          echo "mode=$perm"
+          case "$perm" in
+            *1|*3|*5|*7) ;;
+            *) echo "not executable: $perm" >&2; exit 1 ;;
+          esac
+
+          echo "== credentials.yaml chmod simulation =="
+          # bind mount は umask 0022 で 755 になる。entrypoint の実物から
+          # chmod 行を抜き出して実行し、600 になることを確認する。
+          # （行が消えたら grep が空になりここで落ちる）
+          mkdir -p "$DSH_HOME"
+          printf 'dummy: value\n' > "$DSH_HOME/.credentials.yaml"
+          chmod 755 "$DSH_HOME/.credentials.yaml"
+          test "$(stat -c %a "$DSH_HOME/.credentials.yaml")" = "755"
+          line=$(grep -F 'chmod 600 "$DSH_HOME/.credentials.yaml"' \
+            /usr/local/bin/docker-entrypoint.sh)
+          test -n "$line"
+          eval "$line"
+          test "$(stat -c %a "$DSH_HOME/.credentials.yaml")" = "600"
+          echo "mode=$(stat -c %a "$DSH_HOME/.credentials.yaml")"
+
+          echo "smoke test passed"
+          SH
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" \
+          | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push
+        env:
+          SHA_TAG: ${{ steps.meta.outputs.sha }}
+        run: |
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:sha-$SHA_TAG"

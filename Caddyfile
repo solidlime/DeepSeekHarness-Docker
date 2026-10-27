@@ -1,0 +1,9 @@
+# 外部 (:3080) で受け、dsh の 127.0.0.1:3081 へ中継する。
+# dsh は Host の authority を --trusted-host と照合するため、
+# クライアント本来の Host を header_up で保持したまま転送する。
+# これが無いと Host が 127.0.0.1:3081 になり dsh 側で拒否される。
+:3080 {
+	reverse_proxy 127.0.0.1:3081 {
+		header_up Host {host}
+	}
+}

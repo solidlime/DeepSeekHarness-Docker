@@ -1,0 +1,28 @@
+services:
+  dsh:
+    image: ghcr.io/solidlime/deepseek-harness-container:latest
+    restart: unless-stopped
+    ports:
+      - "3080:3080"
+    volumes:
+      # /root まるごと永続化する。DSH_HOME (=/root/.dsh) と
+      # .credentials.yaml、クッキー署名用 secret がまとめて残り、
+      # 再起動後も初回ログインのクッキーが有効なままになる。
+      - /volume1/docker/dsh/root:/root
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Tokyo
+      DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-nas:3080}
+    healthcheck:
+      # dsh は 127.0.0.1 bind なので、コンテナ内から Caddy 経由で叩く。
+      # トークン無しでもログイン画面 (303/200) が返れば待ち受けている証拠。
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS -o /dev/null -H "Host: 127.0.0.1:3080"
+          http://127.0.0.1:3080/ || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
