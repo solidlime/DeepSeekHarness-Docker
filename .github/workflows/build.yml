@@ -47,12 +47,15 @@ jobs:
           set -eu
 
           echo "== dsh --version =="
-          # DSH_VERSION はイメージの ENV（Dockerfile の ARG 由来）。
-          # 出力形式（"dsh/0.2.0-rc.2" 等）は揺れるため、指定版が含まれる
-          # ことをもって一致とみなす。stderr に出る実装も吸収する。
+          # 期待値はイメージ内の package.json（インストールされた実バージョン）から取る。
+          # バージョンは意図的に固定していない（npm の dist-tag `latest` に追従）ので、
+          # CI 側でバージョン番号を二重管理しない。
+          expected=$(node -p \
+            "require('/opt/dsh/node_modules/@deepseek-ai/dsh/package.json').version")
+          echo "expected=$expected"
           out=$(dsh --version 2>&1)
           echo "$out"
-          echo "$out" | grep -qF "$DSH_VERSION"
+          echo "$out" | grep -qF "$expected"
 
           echo "== Caddyfile =="
           test -f /etc/caddy/Caddyfile

@@ -1,8 +1,7 @@
 FROM node:24-bookworm-slim
 
-# イメージ内の dsh のバージョン。CI の smoke test が照合に使う。
-ARG DSH_VERSION=0.2.0-rc.2
-ENV DSH_VERSION=${DSH_VERSION}
+# dsh のバージョンは固定しない。package.json が dist-tag `latest` を指し、
+# ビルドのたびに npm レジストリの最新を解決する（更新は再ビルド＝CI で入る）。
 
 # python3/make/g++: node-pty 等のビルド保険（prebuilt が使えなかった場合に備える）
 # ca-certificates/curl: Caddy リポジトリ取得用
@@ -28,7 +27,8 @@ WORKDIR /opt/dsh
 COPY package.json /opt/dsh/package.json
 RUN npm install --install-strategy=hoisted --no-legacy-peer-deps --no-fund --no-audit
 
-RUN ln -s /opt/dsh/node_modules/.bin/dsh /usr/local/bin/dsh
+RUN ln -s /opt/dsh/node_modules/.bin/dsh /usr/local/bin/dsh \
+ && node -p "'dsh runtime: ' + require('/opt/dsh/node_modules/@deepseek-ai/dsh/package.json').version"
 
 ENV DSH_HOME=/root/.dsh
 
