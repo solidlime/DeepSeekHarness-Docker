@@ -1,6 +1,8 @@
 services:
   dsh:
     image: ghcr.io/solidlime/deepseek-harness-container:latest
+    container_name: dsh
+    hostname: dsh
     restart: unless-stopped
     ports:
       - "3080:3080"
@@ -9,8 +11,6 @@ services:
       # .credentials.yaml、クッキー署名用 secret がまとめて残り、
       # 再起動後も初回ログインのクッキーが有効なままになる。
       - /volume1/docker/dsh/root:/root
-    env_file:
-      - .env
     environment:
       TZ: Asia/Tokyo
       DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-nas:3080}
