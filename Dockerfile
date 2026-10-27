@@ -30,6 +30,12 @@ ENV DSH_HOME=/root/.dsh
 # 起動時インストールの実体。$DSH_HOME 配下なので /root を永続化すれば残る。
 ENV DSH_RUNTIME=/root/.dsh/runtime
 
+# `dsh plugin` は残余引数をそのまま pnpm に転送するだけなので、pnpm が無いと
+# プラグインはひとつも入らない。数 MB で毎回入れ直す理由も無いのでイメージに焼く。
+# （dsh 本体は数百 MB なので引き続き起動時に永続ボリュームへ入れる）
+RUN npm install -g pnpm@10 \
+ && pnpm --version
+
 # インストール手順を固定するための manifest。イメージにはこれだけ置き、
 # 依存の実体は起動時に $DSH_RUNTIME へ入れる。
 # .npmrc は作らない・持ち込まない（legacy-peer-deps / global-style があると install が壊れる）。
