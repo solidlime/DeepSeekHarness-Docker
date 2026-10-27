@@ -1,0 +1,3 @@
+# core.autocrlf=true の Windows で作業しているため、明示しないと
+# Dockerfile や *.sh が CRLF で checkout されてコンテナ内で壊れる。
+* text=auto eol=lf
