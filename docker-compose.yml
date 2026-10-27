@@ -4,6 +4,11 @@ services:
     container_name: dsh
     hostname: dsh
     restart: unless-stopped
+    # dsh からホスト上の LiteLLM へは固定 IP でなく host-gateway で行く。
+    # Docker の bridge サブネットはネットワーク再作成で変わるため、
+    # 192.168.x.1 直書きだと再起動後に突然タイムアウトする（実際に踏んだ）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "3080:3080"
     volumes:
@@ -20,9 +25,9 @@ services:
       DSH_RUNTIME_REFRESH: ${DSH_RUNTIME_REFRESH:-0}
       # dsh のモデルは LiteLLM ゲートウェイに相乗りする（モデル名は
       # cordis.patch.yml の llm-pi-ai ルートで定義済み）。
-      # 192.168.176.1 は NAS の docker bridge gateway（= ホスト自身）。
-      # ホスト側の IP が違う環境では .env で上書きする。
-      DSH_LITELLM_URL: ${DSH_LITELLM_URL:-http://192.168.176.1:4000/v1}
+      # host.docker.internal は上の extra_hosts でホスト自身を指す。
+      # ホスト側のポートが違う環境では .env で上書きする。
+      DSH_LITELLM_URL: ${DSH_LITELLM_URL:-http://host.docker.internal:4000/v1}
       # マスターキーはリポジトリに焼き込まず、ここで渡す。
       # entrypoint が .credentials.yaml の refs: に登録する。
       DSH_LITELLM_KEY: ${DSH_LITELLM_KEY:-}
@@ -34,7 +39,8 @@ services:
       test:
         - CMD-SHELL
         - >-
-          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: 127.0.0.1:3080'
+          test "$(curl -sS -o /dev/null -w '%{http_code}'
+          -H "Host: ${DSH_TRUSTED_HOST}"
           http://127.0.0.1:3080/ || echo 000)" != "000"
       interval: 30s
       timeout: 5s
