@@ -19,11 +19,11 @@ fi
 mkdir -p "$DSH_RUNTIME"
 
 # manifest が変わったとき（package.json の更新）は入れ直す。
-MANIFEST_SUM=$(sha256sum /opt/dsh/package.json | cut -d' ' -f1)
+MANIFEST_SUM=$(sha256sum /opt/dsh/manifest/package.json | cut -d' ' -f1)
 if [ "$DSH_RUNTIME_REFRESH" = "1" ] || [ ! -x "$DSH_RUNTIME/node_modules/.bin/dsh" ] \
 	|| [ "$(cat "$DSH_RUNTIME/.manifest-sha256" 2>/dev/null)" != "$MANIFEST_SUM" ]; then
 	echo "bootstrap: installing dsh into $DSH_RUNTIME (this takes a few minutes on first run)"
-	cp /opt/dsh/package.json "$DSH_RUNTIME/package.json"
+	cp /opt/dsh/manifest/package.json "$DSH_RUNTIME/package.json"
 	cd "$DSH_RUNTIME"
 	# 依存解決は peer 依存の都合で global では壊れるので、ローカルに hoisted で入れる。
 	npm install --install-strategy=hoisted --no-legacy-peer-deps --no-fund --no-audit
@@ -34,6 +34,21 @@ else
 fi
 
 export PATH="$DSH_RUNTIME/node_modules/.bin:$PATH"
+
+# 人格 preset と運用ルールを初回だけ配る。
+# profile が既にあるなら（= 一度起動済みなら）ユーザーの編集を尊重して触らない。
+# 入れ直したいときは DSH_PROFILE_RESET=1 で起動する。
+PROFILE_DIR="$DSH_HOME/profiles/web"
+mkdir -p "$PROFILE_DIR"
+if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$PROFILE_DIR/cordis.patch.yml" ]; then
+	cp /opt/dsh/presets/cordis.patch.yml "$PROFILE_DIR/cordis.patch.yml"
+	echo "bootstrap: installed agent presets into $PROFILE_DIR"
+fi
+if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$DSH_HOME/AGENTS.md" ]; then
+	cp /opt/dsh/presets/AGENTS.md "$DSH_HOME/AGENTS.md"
+	echo "bootstrap: installed AGENTS.md into $DSH_HOME"
+fi
+
 cd /root/workspace
 
 # Caddyfile は毎回イメージ同梱の種から作り直す（コンテナ内なので永続化不要）。

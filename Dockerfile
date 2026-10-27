@@ -39,13 +39,19 @@ RUN npm install -g pnpm@10 \
 # インストール手順を固定するための manifest。イメージにはこれだけ置き、
 # 依存の実体は起動時に $DSH_RUNTIME へ入れる。
 # .npmrc は作らない・持ち込まない（legacy-peer-deps / global-style があると install が壊れる）。
-COPY package.json /opt/dsh/package.json
+COPY package.json /opt/dsh/manifest/package.json
 
 # dsh の作業ディレクトリ。/root ごとボリューム永続化する前提。
 WORKDIR /root/workspace
 
 # Caddyfile は「種」として置く。実体の /etc/caddy/Caddyfile は起動のたびに
 # entrypoint が種から作り、bootstrap.js が cookie 行を足す。
+# 人格 preset（ヘルタ・人形7体・ルアン・メェイ）と運用ルール。
+# 起動時に既存の profile patch が無ければここから複製する。あれば触らない
+# （ユーザーの編集を上書きしないため）。
+COPY dsh/cordis.patch.yml /opt/dsh/presets/cordis.patch.yml
+COPY dsh/AGENTS.md /opt/dsh/presets/AGENTS.md
+
 COPY Caddyfile /etc/caddy/Caddyfile.dsh
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY bootstrap.js /usr/local/bin/bootstrap.js
