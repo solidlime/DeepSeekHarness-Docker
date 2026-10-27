@@ -51,6 +51,7 @@ WORKDIR /root/workspace
 # （ユーザーの編集を上書きしないため）。
 COPY dsh/cordis.patch.yml /opt/dsh/presets/cordis.patch.yml
 COPY dsh/AGENTS.md /opt/dsh/presets/AGENTS.md
+COPY dsh/pnpm-workspace.yaml /opt/dsh/presets/pnpm-workspace.yaml
 
 COPY Caddyfile /etc/caddy/Caddyfile.dsh
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

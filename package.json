@@ -9,6 +9,6 @@
     "protobufjs"
   ],
   "dependencies": {
-    "@deepseek-ai/dsh": "latest"
+    "@deepseek-ai/dsh": "0.2.1-rc.4"
   }
 }

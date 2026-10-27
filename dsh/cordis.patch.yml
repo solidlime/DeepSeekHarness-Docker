@@ -1348,3 +1348,10 @@
   config:
     provider: litellm
     model: General
+
+# dsh-web-all の remote-web-ui は localhost を「主端末」とみなし、nas:3080 など
+# 他のホスト名からのアクセスを未ペアリング端末として画面ごとブロックする。
+# この構成では全端末が Caddy 経由の署名 cookie で認証されるため、プラグイン側の
+# ペアリング要求は画面を塞ぐだけになる。remote-bridge は Task Board 連携に要るので残す。
+- id: web-ui-remote-web-ui
+  disabled: true

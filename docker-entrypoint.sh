@@ -67,6 +67,15 @@ if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$PROFILE_DIR/cordis.patch.yml" ]; t
 	cp /opt/dsh/presets/cordis.patch.yml "$PROFILE_DIR/cordis.patch.yml"
 	echo "bootstrap: installed agent presets into $PROFILE_DIR"
 fi
+
+# dsh-plugin add はプロファイル側の pnpm-workspace.yaml でビルドスクリプトを
+# 許可する。無いと dsh-web-all（cloudflared/ssh2/cpu-features）の初回 add が
+# ERR_PNPM_IGNORED_BUILDS で半端に終わり、bundles に載らず黙って効かなくなる。
+# 既存があれば触らない（ユーザーの編集を尊重）。
+if [ ! -s "$PROFILE_DIR/pnpm-workspace.yaml" ]; then
+	cp /opt/dsh/presets/pnpm-workspace.yaml "$PROFILE_DIR/pnpm-workspace.yaml"
+	echo "bootstrap: installed pnpm-workspace.yaml into $PROFILE_DIR"
+fi
 if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$DSH_HOME/AGENTS.md" ]; then
 	cp /opt/dsh/presets/AGENTS.md "$DSH_HOME/AGENTS.md"
 	echo "bootstrap: installed AGENTS.md into $DSH_HOME"
