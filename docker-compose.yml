@@ -18,6 +18,14 @@ services:
       # npm install し、以降は永続ボリュームのそれを使い回す。
       # 手元の dsh を最新にしたいときだけ 1 を入れて作り直す（数分かかる）。
       DSH_RUNTIME_REFRESH: ${DSH_RUNTIME_REFRESH:-0}
+      # dsh のモデルは LiteLLM ゲートウェイに相乗りする（モデル名は
+      # cordis.patch.yml の llm-pi-ai ルートで定義済み）。
+      # 192.168.176.1 は NAS の docker bridge gateway（= ホスト自身）。
+      # ホスト側の IP が違う環境では .env で上書きする。
+      DSH_LITELLM_URL: ${DSH_LITELLM_URL:-http://192.168.176.1:4000/v1}
+      # マスターキーはリポジトリに焼き込まず、ここで渡す。
+      # entrypoint が .credentials.yaml の refs: に登録する。
+      DSH_LITELLM_KEY: ${DSH_LITELLM_KEY:-}
     healthcheck:
       # dsh は 127.0.0.1 bind なので、コンテナ内から Caddy 経由で叩く。
       # cookie 注入前は 401、注入後は 200。どちらも「待ち受けている」証拠なので

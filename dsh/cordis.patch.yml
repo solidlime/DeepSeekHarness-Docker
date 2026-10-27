@@ -1324,3 +1324,27 @@
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
 
+- id: llm-pi-ai
+  config:
+    providers:
+      litellm:
+        displayName: LiteLLM
+        api: openai-completions
+        baseURL: !!js process.env.DSH_LITELLM_URL ?? 'http://192.168.176.1:4000/v1'
+        apiKeyEnv: DSH_LITELLM_KEY
+        models:
+          - id: Orchestrator
+          - id: Advisor
+          - id: Plan
+          - id: Fixer
+          - id: Designer
+          - id: Explore
+          - id: Librarian
+          - id: General
+          - id: Free
+
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: litellm
+    model: General

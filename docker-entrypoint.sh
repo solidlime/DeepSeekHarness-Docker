@@ -8,8 +8,31 @@ mkdir -p "$DSH_HOME"
 # .credentials.yaml を検出して起動を拒否する
 # （credentials-local: <path> is readable beyond its owner (mode 755)）。
 # ホスト側のパーミッションに依存しないよう、起動のたびに締め直す。
-if [ -f "$DSH_HOME/.credentials.yaml" ]; then
-	chmod 600 "$DSH_HOME/.credentials.yaml"
+CRED="$DSH_HOME/.credentials.yaml"
+if [ -f "$CRED" ]; then
+	chmod 600 "$CRED"
+
+	# LiteLLM のマスターキーを credentials の refs: に名前で登録する。
+	# .credentials.yaml には records:（<scope>/<id> → レコード）と
+	# refs:（名前 → 値）の 2 種類のセクションがあり、llm-pi-ai の
+	# apiKeyEnv が引くのは refs: のほう。records: に書くと
+	# 'credential key "X" must be "<scope>/<id>"' で起動が失敗する。
+	# 鍵は環境変数で渡す（リポジトリに焼き込まない）。
+	if [ -n "$DSH_LITELLM_KEY" ]; then
+		if grep -q '^  DSH_LITELLM_KEY:' "$CRED"; then
+			awk -v k="$DSH_LITELLM_KEY" '/^  DSH_LITELLM_KEY:/{print "  DSH_LITELLM_KEY: " k; next} {print}' \
+				"$CRED" > "$CRED.tmp"
+		elif grep -q '^refs:' "$CRED"; then
+			awk -v k="$DSH_LITELLM_KEY" '/^refs:/{print; print "  DSH_LITELLM_KEY: " k; next} {print}' \
+				"$CRED" > "$CRED.tmp"
+		else
+			awk -v k="$DSH_LITELLM_KEY" '{print} /^version:/{print "refs:"; print "  DSH_LITELLM_KEY: " k}' \
+				"$CRED" > "$CRED.tmp"
+		fi
+		mv "$CRED.tmp" "$CRED"
+		chmod 600 "$CRED"
+		echo "bootstrap: registered DSH_LITELLM_KEY in $CRED"
+	fi
 fi
 
 # --- dsh のインストール（初回だけ）---------------------------------------

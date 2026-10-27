@@ -138,6 +138,29 @@ DSH_RUNTIME_REFRESH=1 docker compose up -d --force-recreate
   `presets:` のような専用キーは存在せず、書いても静かに無視される（実測）。
 - 人格は `persona.prefix` に入れる。`AGENTS.md` に人格を書くと preset 切り替えと二重になる。
 
+## モデル（LiteLLM ゲートウェイ）
+
+dsh のモデルは、 NAS で動いている LiteLLM（`nas:4000`）に相乗りする。
+モデルの実体・使用額・追加は LiteLLM 側の管理（`litellm-admin` スキル）。
+
+| 項目 | 値 |
+| --- | --- |
+| 設定場所 | `dsh/presets/cordis.patch.yml` の `- id: llm-pi-ai` エントリ |
+| 接続先 | `DSH_LITELLM_URL`（既定 `http://192.168.176.1:4000/v1`） |
+| 鍵 | `DSH_LITELLM_KEY`（`.env` で渡す） |
+| 既定モデル | `agent-default-model` で `General` |
+
+- `192.168.176.1` は NAS の **docker bridge gateway**（= ホスト自身）。
+  dsh コンテナから `nas:4000` は解決できても届かない（ネットワーク分離）。
+  ホスト IP が違う環境では `.env` の `DSH_LITELLM_URL` で上書きする。
+- LiteLLM のモデル名（`Orchestrator` / `Advisor` / `Plan` / `Fixer` /
+  `Designer` / `Explore` / `Librarian` / `General` / `Free`）をそのまま
+  `models:` に並べている。LiteLLM 側で増やしたらここにも足す。
+- **鍵は `.credentials.yaml` の `refs:` に入れる**。`records:` と間違えると
+  `credential key "X" must be "<scope>/<id>"` で dsh が起動しない。
+  この登録は `docker-entrypoint.sh` が起動時にやるので、手で書かなくてよい。
+- 画像入力は未対応（`input:` 未指定 = テキストのみ）。
+
 ## 既知の制約
 
 - **amd64 のみ**を想定。node-pty の prebuilt と本イメージの検証は amd64 で行った。
