@@ -9,7 +9,7 @@
 //
 // 副産物: dsh のログが親プロセスのパイプに流れるため、`docker logs` で見える。
 
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { readFileSync, writeFileSync, renameSync } = require('node:fs');
 const { createHash, createHmac } = require('node:crypto');
 
@@ -114,8 +114,37 @@ if (process.env.DSH_BOOTSTRAP_SELFTEST === '1') {
 	process.exit(0);
 }
 
+// Caddyfile を書き換えただけでは反映されない。Caddy は起動時に一度読むだけで、
+// ファイルの監視もしない（autosave.json に残った設定は「読んだ内容」の記録）。
+// ここを忘れると、Caddyfile に正しい cookie が書いてあるのに全リクエストが 401 になる。
+function reloadCaddy() {
+	const r = spawnSync('caddy', ['reload', '--config', CADDYFILE, '--adapter', 'caddyfile'], { encoding: 'utf8' });
+	if (r.status !== 0) {
+		throw new Error(`caddy reload failed: ${(r.stderr || r.error?.message || '').trim()}`);
+	}
+}
+
+function inject(authority, credentialsPath) {
+	const cookie = sessionCookie(authority, readSecret(credentialsPath));
+	writeCaddyfile(caddyfile(readFileSync(CADDYFILE_IN, 'utf8'), authority, cookie));
+	reloadCaddy();
+	console.log(`bootstrap: injected session cookie for ${authority} (expires ${new Date(cookie.expiresAt).toISOString()})`);
+}
+
 const authority = process.env.DSH_TRUSTED_HOST || 'nas:3080';
 const credentialsPath = (process.env.DSH_HOME || '/root/.dsh') + '/.credentials.yaml';
+
+// 通常起動（credentials が永続ボリュームに残っている）では dsh を待たずに注入する。
+// dsh の起動ログを待つ方式だけだと、Caddy が先に空の Caddyfile で起動しているため
+// 書き込みが反映されない（reload が要る）。先に確定させておけば順序の穴が消える。
+let patched = false;
+try {
+	inject(authority, credentialsPath);
+	patched = true;
+} catch (err) {
+	// 初回起動はここに来る（dsh が credentials.yaml を作る前）。下の watch で拾う。
+	console.error(`bootstrap: pre-injection skipped: ${err.message}`);
+}
 
 const child = spawn(
 	'dsh',
@@ -129,21 +158,13 @@ const child = spawn(
 	{ stdio: ['inherit', 'pipe', 'pipe'] },
 );
 
-let patched = false;
-
 function watch(chunk) {
 	if (patched) return;
-	const text = chunk.toString();
-	const token = parseLaunchToken(text);
-	if (token === undefined) {
-		// 期限が来ていた cookie は起動時刻起点に延ばす価値がない（実質 10000 年なので無い）。
-		return;
-	}
+	const token = parseLaunchToken(chunk.toString());
+	if (token === undefined) return;
+	patched = true;
 	try {
-		const cookie = sessionCookie(authority, readSecret(credentialsPath));
-		writeCaddyfile(caddyfile(readFileSync(CADDYFILE_IN, 'utf8'), authority, cookie));
-		patched = true;
-		console.log(`bootstrap: injected session cookie for ${authority} (expires ${new Date(cookie.expiresAt).toISOString()})`);
+		inject(authority, credentialsPath);
 	} catch (err) {
 		// 注入に失敗しても dsh 自体は動く。トークン URL での初回ログインに戻るだけ。
 		console.error(`bootstrap: cookie injection failed: ${err.message}`);
@@ -153,9 +174,6 @@ function watch(chunk) {
 const forward = (stream, out) => stream.on('data', (chunk) => { watch(chunk); out.write(chunk); });
 forward(child.stdout, process.stdout);
 forward(child.stderr, process.stderr);
-
-// Caddy は dsh の起動より前に動いている必要がある（:3080 を先に確保する）ので、
-// entrypoint 側で待ち受けてから起動済み。設定変更は自動リロードで反映される。
 const shutdown = (signal) => { child.kill(signal); };
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
