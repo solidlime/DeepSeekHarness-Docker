@@ -3,7 +3,6 @@
   "private": true,
   "dependencies": {
     "@linxin666/dsh-web-all": "^0.4.11",
-    "@openviking/dsh-memory-plugin": "^0.5.30",
     "ds-bot": "0.2.3",
     "dsh-better-sidebar": "0.28.2",
     "dsh-mobile-upgrade": "^0.8.11",
@@ -18,7 +17,6 @@
         "ds-bot",
         "@linxin666/dsh-web-all",
         "dsh-better-sidebar",
-        "@openviking/dsh-memory-plugin",
         "dsh-mobile-upgrade"
       ]
     }
