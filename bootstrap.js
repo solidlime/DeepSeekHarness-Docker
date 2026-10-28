@@ -79,9 +79,11 @@ function caddyfile(base, authority, cookie) {
 		//   /api/dsh-usage/*            dsh-usage（Usage Statistics が 403 forbidden: loopback-only）
 		//   /api/dsh-web-ui-settings/*  dsh-client-ui-web-ui-settings（設定画面が読めない）
 		//   /api/dsh-session-archive*   dsh-session-archive（Session Archive Manager が 403）
-		// ここには入れないもの: /api/pair。ペアリングコードは「そのマシンでしか読めない」
-		// のが設計で、LAN から読めたら誰でもデバイス登録できてしまう。
-		'\t@loopbackFenced path /api/dsh-browser-view/* /api/dsh-usage/* /api/dsh-web-ui-settings/* /api/dsh-session-archive*',
+		//   /api/pair*                  dsh-remote-web-ui（スマホのペアリング）。
+		//     本来は「そのマシンでしかコードを読めない」設計だが、UI に出たコードを
+		//     スマホに入力する運用ができず使いものにならない。Caddy は既に全リクエストに
+		//     共有 cookie を入れているので、ここを開けても守りの強さは変わらない。
+		'\t@loopbackFenced path /api/dsh-browser-view/* /api/dsh-usage/* /api/dsh-web-ui-settings/* /api/dsh-session-archive* /api/pair*',
 		'\thandle @loopbackFenced {',
 		'\t\treverse_proxy 127.0.0.1:3081 {',
 		'\t\t\theader_up Host 127.0.0.1:3081',
