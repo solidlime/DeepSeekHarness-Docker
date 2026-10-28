@@ -15,10 +15,26 @@
 	[class*="hHd-Xa_root"] {
 		height: 100dvh !important;
 		max-height: 100dvh !important;
+		/* 中身は 280px 固定なので、ドロワーを広げても左に張り付く。 */
+		width: 100% !important;
+		min-width: 100% !important;
+		max-width: 100% !important;
 	}
 
 	/* 2. 設定パネルをアプリのサイドバーより前面に出す。 */
 	[class*="bt-settings-layer"] {
 		z-index: 1200 !important;
+	}
+
+	/* 3. サイドバーのドロワーは全画面に広げる。既定は 320px 固定で、
+	 *    400px 未満の画面では開いた瞬間に 1px しか残らない。
+	 *    上流の width は !important 付きなので、min-width で押し勝つ。
+	 *    背景をトークンにしないと、後ろのチャットが透ける。 */
+	[class*="sidebarCol"] {
+		min-width: 100vw !important;
+		width: 100vw !important;
+		max-width: 100vw !important;
+		background: var(--dsw-alias-bg-layer-1) !important;
+		border-right: 0 !important;
 	}
 }
