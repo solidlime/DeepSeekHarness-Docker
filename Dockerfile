@@ -42,12 +42,6 @@ RUN npm install -g pnpm@10 \
 # .npmrc は作らない・持ち込まない（legacy-peer-deps / global-style があると install が壊れる）。
 COPY package.json /opt/dsh/manifest/package.json
 
-# プラグインの manifest。dsh 本体（$DSH_RUNTIME）とは別レイヤーで、
-# profile 側（$DSH_HOME/profiles/web）に置く。ここを唯一の源にして
-# 起動時に差分を同期する（名前を変えただけのパッケージ名なので manifest と
-# profile の実体がずれる事故が起きやすい。二重管理はやめた）。
-COPY dsh/profile-package.json /opt/dsh/presets/package.json
-
 # dsh の作業ディレクトリ。/root ごとボリューム永続化する前提。
 WORKDIR /root/workspace
 
