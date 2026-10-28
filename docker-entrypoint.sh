@@ -127,11 +127,15 @@ cd /root/workspace
 # イメージに焼けない。毎回ここで差し込む。冪等（既に在れば何もしない）。
 # 上流が直ったら dsh/mobile-fix.css とこのブロックを消せばよい。
 MOBILE_FIX_HTML="$DSH_RUNTIME/node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html"
-if [ -f "$MOBILE_FIX_HTML" ] && ! grep -q 'dsh-mobile-fix.css' "$MOBILE_FIX_HTML"; then
+# DSH_MOBILE_FIX=0 でリンクごと外せる（上流が直ったとき用）。
+if [ "${DSH_MOBILE_FIX:-1}" = "1" ] && [ -f "$MOBILE_FIX_HTML" ] && ! grep -q 'dsh-mobile-fix.css' "$MOBILE_FIX_HTML"; then
 	node -e '
 		const fs = require("node:fs");
 		const p = process.argv[1];
-		const tag = "    <link rel=\"stylesheet\" href=\"/dsh-mobile-fix.css\" />\n";
+		// URL に cache-busting を入れる。Caddy は ETag を返し
+		// Cache-Control: no-store があってもブラウザが古い本文を使うことがある
+		// (Chrome の memory cache)。CSS を直しても反映されずに嵌まった。
+		const tag = "    <link rel=\"stylesheet\" href=\"/dsh-mobile-fix.css?v=3\" />\n";
 		fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace("</head>", tag + "  </head>"));
 	' "$MOBILE_FIX_HTML"
 	echo "bootstrap: injected mobile-fix stylesheet into index.html"

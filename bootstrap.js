@@ -76,6 +76,8 @@ function caddyfile(base, authority, cookie) {
 		// file_server の root + request path を実ファイル名と合わせること。
 		'\t@mobileFix path /dsh-mobile-fix.css',
 		'\thandle @mobileFix {',
+		// ETag 付きで返るとブラウザが古い本文を使うことがある（実際に嵌まった）。
+		'\t\theader Cache-Control "no-store, must-revalidate"',
 		'\t\troot * /opt/dsh',
 		'\t\tfile_server',
 		'\t}',

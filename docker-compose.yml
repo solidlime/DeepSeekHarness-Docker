@@ -1,6 +1,10 @@
 services:
   dsh:
     image: ghcr.io/solidlime/deepseek-harness-container:latest
+    # :latest は Portainer の再デプロイで pull されないことがある（実際に踏んだ。
+    # イメージの created が更新されず、古い CSS のまま動き続けた）。
+    # 毎回 registry を見に行かせる。
+    pull_policy: always
     container_name: dsh
     hostname: dsh
     restart: unless-stopped
@@ -18,6 +22,9 @@ services:
       - /volume1/docker/dsh/root:/root
     environment:
       TZ: Asia/Tokyo
+      # モバイル修正 CSS の URL に焼く。上流でレイアウトが直ったら
+      # を空にするとリンクごと消える。
+      DSH_MOBILE_FIX: ${DSH_MOBILE_FIX:-1}
       DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-nas:3080}
       # dsh 本体はイメージに入っていない。初回起動時に $DSH_HOME/runtime へ
       # npm install し、以降は永続ボリュームのそれを使い回す。
