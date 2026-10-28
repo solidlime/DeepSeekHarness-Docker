@@ -28,9 +28,11 @@ services:
       # host.docker.internal は上の extra_hosts でホスト自身を指す。
       # ホスト側のポートが違う環境では .env で上書きする。
       DSH_LITELLM_URL: ${DSH_LITELLM_URL:-http://host.docker.internal:4000/v1}
-      # マスターキーはリポジトリに焼き込まず、ここで渡す。
-      # entrypoint が .credentials.yaml の refs: に登録する。
-      DSH_LITELLM_KEY: ${DSH_LITELLM_KEY:-}
+      # マスターキーはここで渡さない。
+      # 以前は ${DSH_LITELLM_KEY:-} で受けて entrypoint が .credentials.yaml に
+      # 書き込んでいたが、Portainer が未設定の変数を空でなく崩れた値にして渡す
+      # ことがあり、その値が refs: を上書きして LiteLLM が 401 になった。
+      # キーは永続ボリュームの /root/.dsh/.credentials.yaml の refs: に直接置く。
     healthcheck:
       # dsh は 127.0.0.1 bind なので、コンテナ内から Caddy 経由で叩く。
       # cookie 注入前は 401、注入後は 200。どちらも「待ち受けている」証拠なので

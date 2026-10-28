@@ -17,8 +17,13 @@ if [ -f "$CRED" ]; then
 	# refs:（名前 → 値）の 2 種類のセクションがあり、llm-pi-ai の
 	# apiKeyEnv が引くのは refs: のほう。records: に書くと
 	# 'credential key "X" must be "<scope>/<id>"' で起動が失敗する。
-	# 鍵は環境変数で渡す（リポジトリに焼き込まない）。
-	if [ -n "$DSH_LITELLM_KEY" ]; then
+	# 値が空や壊れた（バックスラッシュ 1文字）場合は書かない。Portainer が
+	# 未設定の ${DSH_LITELLM_KEY:-} をバックスラッシュに化けさせ、その値で
+	# refs: を上書きして LiteLLM が 401 になった。キーはこのファイルを正とする。
+	case "$DSH_LITELLM_KEY" in
+	'') echo "bootstrap: DSH_LITELLM_KEY is empty, leaving $CRED as is" ;;
+	'\\') echo "bootstrap: DSH_LITELLM_KEY is a stray backslash, leaving $CRED as is" ;;
+	*)
 		if grep -q '^  DSH_LITELLM_KEY:' "$CRED"; then
 			awk -v k="$DSH_LITELLM_KEY" '/^  DSH_LITELLM_KEY:/{print "  DSH_LITELLM_KEY: " k; next} {print}' \
 				"$CRED" > "$CRED.tmp"
@@ -32,7 +37,7 @@ if [ -f "$CRED" ]; then
 		mv "$CRED.tmp" "$CRED"
 		chmod 600 "$CRED"
 		echo "bootstrap: registered DSH_LITELLM_KEY in $CRED"
-	fi
+		esac
 fi
 
 # --- dsh のインストール（初回だけ）---------------------------------------
@@ -79,6 +84,40 @@ fi
 if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$DSH_HOME/AGENTS.md" ]; then
 	cp /opt/dsh/presets/AGENTS.md "$DSH_HOME/AGENTS.md"
 	echo "bootstrap: installed AGENTS.md into $DSH_HOME"
+fi
+
+# --- Chromium（ブラウザビューの実体）----------------------------------
+# dsh-plugin-browser は PUPPETEER_EXECUTABLE_PATH の Chrome を起動し、その
+# 画面を screencast で右サイドバーに配信する。イメージに焼くと pull が
+# 300MB 近く重くなるので、永続ボリュームに初回だけ入れて使い回す。
+# apt の依存パッケージはコンテナ再作成で消えるので毎回入れる。
+CHROME_ROOT="$DSH_HOME/browsers"
+find_chrome() {
+	find "$CHROME_ROOT" -name chrome -type f -perm -u+x 2>/dev/null | head -1
+}
+CHROME_BIN="$(find_chrome)"
+if [ -z "$CHROME_BIN" ]; then
+	echo "bootstrap: installing chrome into $CHROME_ROOT"
+	npx --yes @puppeteer/browsers install chrome@stable --path "$CHROME_ROOT" \
+		> /tmp/chrome-install.log 2>&1 || echo "bootstrap: chrome install failed"
+	CHROME_BIN="$(find_chrome)"
+fi
+if [ -n "$CHROME_BIN" ]; then
+	apt-get update -qq >> /tmp/chrome-install.log 2>&1 \
+		&& apt-get install -y -qq --no-install-recommends \
+		libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+		libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+		libgbm1 libpango-1.0-0 libcairo2 libasound2 libnspr4 libx11-xcb1 \
+		unzip >> /tmp/chrome-install.log 2>&1 \
+		|| echo "bootstrap: chrome deps install failed"
+	# コンテナでは SUID sandbox が使えないのでラッパーで無効化する。
+	printf '#!/bin/sh\nexec %s --no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage "$@"\n' \
+		"$CHROME_BIN" > /usr/bin/chromium
+	chmod +x /usr/bin/chromium
+	export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+	echo "bootstrap: chrome ready: $CHROME_BIN"
+else
+	echo "bootstrap: chrome unavailable, browser view stays disabled"
 fi
 
 cd /root/workspace

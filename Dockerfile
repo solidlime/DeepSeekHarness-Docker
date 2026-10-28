@@ -12,9 +12,10 @@ FROM node:24-bookworm-slim
 # python3/make/g++: node-pty / koffi 等の prebuilt が使えなかった場合のビルド保険
 # ca-certificates/curl/gnupg: Caddy リポジトリ取得と npm の TLS 用
 # tini: PID 1 としてゾンビ回収とシグナル転送を行う
+# unzip: entrypoint が初回起動時に Chrome を永続ボリュームへ展開する
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      python3 make g++ ca-certificates curl gnupg tini \
+      python3 make g++ ca-certificates curl gnupg tini unzip \
  && rm -rf /var/lib/apt/lists/*
 
 # Caddy 公式 apt リポジトリ（curl | sh は使わない。鍵は gpg --dearmor で配置する）
