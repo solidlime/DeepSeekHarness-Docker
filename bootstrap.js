@@ -72,10 +72,27 @@ function caddyfile(base, authority, cookie) {
 		`# このセクションは bootstrap.js が起動のたびに書き換える（手で編集しない）。`,
 		`# 守りは LAN 限定（ポート転送しないこと）。パスキー/mTLS はこのブロックの前に差し込む。`,
 		site + ' {',
-		'\treverse_proxy 127.0.0.1:3081 {',
-		'\t\theader_up Host {http.request.hostport}',
+		'\t@browserView path /api/dsh-browser-view/*',
+		'\thandle @browserView {',
+		'\t\treverse_proxy 127.0.0.1:3081 {',
+		// dsh-client-ui-browser-view はループバック以外を 403 で拒む（Host/Origin と
+		// 転送ヘッダを見る）。プロキシ越しだと Host が nas:3080 になり、パネルが
+		// Connecting のまま止まる。認証は下の Cookie 注入で済んでいるので、
+		// このパスだけ見かけ上ループバックとして中継する。
+		'\t\t\theader_up Host 127.0.0.1:3081',
+		'\t\t\theader_up Origin http://127.0.0.1:3081',
+		'\t\t\theader_up -X-Forwarded-For',
+		'\t\t\theader_up -X-Forwarded-Proto',
+		'\t\t\theader_up -X-Real-IP',
+		'\t\t\theader_up -Cf-Connecting-Ip',
 		// クライアントの cookie は捨てて、こちらで作ったもので置き換える。
 		// 残すと、古い cookie を持つ端末だけが 401 になる差が出る。
+		`\t\t\theader_up Cookie "${cookie.name}=${cookie.value}"`,
+		'\t\t}',
+		'\t}',
+		'\thandle {',
+		'\t\treverse_proxy 127.0.0.1:3081 {',
+		'\t\theader_up Host {http.request.hostport}',
 		`\t\theader_up Cookie "${cookie.name}=${cookie.value}"`,
 		'\t}',
 		'}',
@@ -114,6 +131,8 @@ function selftest() {
 	// 共有 cookie を注入する（LAN 境界で守る）。クライアントの cookie は置き換える。
 	assert.ok(cf.includes(`header_up Cookie "${c.name}=${c.value}"`), 'shared cookie must be injected');
 	assert.ok(cf.includes('header_up Host {http.request.hostport}'));
+	// ブラウザビューは loopback 前提で 403 を返すので、このパスだけ Host を差し替える。
+	assert.ok(cf.includes('header_up Host 127.0.0.1:3081'), 'browser view must look loopback to dsh');
 	assert.strictEqual(cf.split(MARKER).length, 2, 'marker must appear once');
 	console.log('selftest ok');
 }
