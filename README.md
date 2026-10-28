@@ -121,15 +121,24 @@ DSH_RUNTIME_REFRESH=1 docker compose up -d --force-recreate
 
 ## エージェントプリセット（人格の移植）
 
-`dsh/presets/` をイメージに焼き込み、**初回起動時にだけ** profile と `$DSH_HOME` へ配る。
+`dsh/presets/` と `dsh/profile-package.json` をイメージに焼き込み、起動時に profile と `$DSH_HOME` へ配る。
 
 | 焼き込み先 | 配り先 | 中身 |
 | --- | --- | --- |
 | `dsh/presets/cordis.patch.yml` | `$DSH_HOME/profiles/web/cordis.patch.yml` | 8 体の preset（ヘルタ・人形#001/#002/#009/#011/#042/#057・ルアン・メェイ） |
+| `dsh/profile-package.json` | `$DSH_HOME/profiles/web/package.json` | プラグインの一覧（bundles と dependencies） |
 | `dsh/presets/AGENTS.md` | `$DSH_HOME/AGENTS.md` | 運用ルールのみ（人格は preset 側の `persona.prefix`） |
 
-既にファイルがあれば**触らない**（ユーザーが UI から足したプラグイン設定を潰さないため）。
-入れ直すときは `DSH_PROFILE_RESET=1` で起動する。
+同期の規則は `.image-sha` ファイルで判定する。イメージの中身が変わったときだけ
+上書きし、GUI でした一行の編集は残す。以前は「既にあれば触らない」だったため、
+イメージを新しくしても実体が古いまま静かにずれていた（`web-ui-pet` の無効化が
+これで効かなかった）。
+
+- 上書きしたときは `*.bak-<epoch>` を隣に残す。
+- どうしても初期化したいときは `DSH_PROFILE_RESET=1` で起動する。
+- プラグインを足し引きしたときは `dsh/profile-package.json` も直す。起動時に
+  差分があれば `pnpm install` が 1 回走る（以前は `dsh plugin add` を
+  パッケージごとに実行していて、その都度 dsh が起動し ENOENT を吐いていた）。
 
 - preset は `cordis.patch.yml` の**トップレベル配列のエントリ**として書く。
   `presets:` のような専用キーは存在せず、書いても静かに無視される（実測）。
