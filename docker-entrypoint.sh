@@ -63,48 +63,8 @@ fi
 
 export PATH="$DSH_RUNTIME/node_modules/.bin:$PATH"
 
-# 人格 preset ・運用ルール・profile の package.json をイメージから配る。
-# 中身が違うときだけ上書きする（冪等）。DSH_PROFILE_RESET=1 なら既存を捨てて入れ直す。
-#
-# 以前は「既存があれば触らない」だったが、それだとイメージを更新しても実体の
-# 設定は初回のまま据え置かれ、新しい preset もプラグイン一覧も反映されないまま
-# 静かにずれる（実際に web-ui-pet が効かず 403 を 5 秒おきに叩き続けた）。
-# 実体で編集したくなったらイメージ側を直してビルドする。
-PROFILE_DIR="$DSH_HOME/profiles/web"
-mkdir -p "$PROFILE_DIR"
-sync_preset() {  # $1=src $2=dst
-	# Remember which image content was already copied. Overwrite only when that
-	# changes. Byte comparison would wipe one-line GUI edits on every restart,
-	# and "keep whatever is newer" would make image updates never land again.
-	stamp="$2.image-sha"
-	sum=$(sha256sum "$1" | cut -d' ' -f1)
-	if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$2" ]; then
-		cp "$1" "$2" && printf '%s' "$sum" >"$stamp"
-		echo "bootstrap: installed $(basename "$2") into $(dirname "$2")"
-		return
-	fi
-	if [ "$(cat "$stamp" 2>/dev/null)" = "$sum" ]; then
-		return
-	fi
-	cp "$2" "$2.bak-$(date +%s)"
-	cp "$1" "$2" && printf '%s' "$sum" >"$stamp"
-	echo "bootstrap: synced $(basename "$2") (image changed; previous kept as .bak)"
-}
-sync_preset /opt/dsh/presets/cordis.patch.yml "$PROFILE_DIR/cordis.patch.yml"
-sync_preset /opt/dsh/presets/package.json "$PROFILE_DIR/package.json"
-
-# dsh-plugin add はプロファイル側の pnpm-workspace.yaml でビルドスクリプトを
-# 許可する。無いと dsh-web-all（cloudflared/ssh2/cpu-features）の初回 add が
-# ERR_PNPM_IGNORED_BUILDS で半端に終わり、bundles に載らず黙って効かなくなる。
-# 既存があれば触らない（ユーザーの編集を尊重）。
-if [ ! -s "$PROFILE_DIR/pnpm-workspace.yaml" ]; then
-	cp /opt/dsh/presets/pnpm-workspace.yaml "$PROFILE_DIR/pnpm-workspace.yaml"
-	echo "bootstrap: installed pnpm-workspace.yaml into $PROFILE_DIR"
-fi
-if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$DSH_HOME/AGENTS.md" ]; then
-	cp /opt/dsh/presets/AGENTS.md "$DSH_HOME/AGENTS.md"
-	echo "bootstrap: installed AGENTS.md into $DSH_HOME"
-fi
+# ここから下は「バニラの dsh」に何も焼き込まない。設定・プラグイン・人格は
+# すべて UI から入れる。イメージは実行環境（node / pnpm / caddy / chrome）だけ。
 
 # --- Chromium（ブラウザビューの実体）----------------------------------
 # dsh-plugin-browser は PUPPETEER_EXECUTABLE_PATH の Chrome を起動し、その
@@ -142,23 +102,14 @@ fi
 
 cd /root/workspace
 
-# manifest（dsh/profile-package.json）と実体の依存がずれていたら、プロファイルの
-# node_modules を作り直す。
-#
-# 以前は `dsh plugin add` をパッケージごとに呼んでいたが、あれは 1 回ごとに dsh
-# プロセスを起動する。9 個差があれば 9 回 dsh が立ち上がり、起動途中の runtime を
-# 読もうとして ENOENT を吐していた (実測: 起動ログ 11596 行のうち 302 件がエラー)。
-# pnpm 1 回で足りる。bundles の一覧は sync_preset が既に配っている。
-if [ -s "$PROFILE_DIR/package.json" ]; then
-	MANIFEST_PKGS=$(node -p "Object.entries(require('/opt/dsh/presets/package.json').dependencies).map(([k,v])=>k+'@'+v).join(' ')" 2>/dev/null)
-	PROFILE_PKGS=$(node -p "Object.entries(require('$PROFILE_DIR/package.json').dependencies).map(([k,v])=>k+'@'+v).join(' ')" 2>/dev/null)
-	if [ "$MANIFEST_PKGS" != "$PROFILE_PKGS" ] || [ ! -d "$PROFILE_DIR/node_modules" ]; then
-		echo "bootstrap: syncing profile dependencies"
-		if ! ( cd "$PROFILE_DIR" && pnpm install --config.confirmModulesPurge=false ) >> /tmp/plugin-sync.log 2>&1; then
-			echo "bootstrap: profile install failed; last lines:"
-			tail -20 /tmp/plugin-sync.log 2>/dev/null
-		fi
-	fi
+# イメージはバニラの dsh だけを入れる。preset・AGENTS.md・プラグイン一覧は
+# 焼き込まないので、プロファイルが空ならここで作る。中身は UI から入れる。
+PROFILE_DIR="$DSH_HOME/profiles/web"
+if [ ! -s "$PROFILE_DIR/package.json" ]; then
+	mkdir -p "$PROFILE_DIR"
+	printf '%s\n' '{"name":"dsh-profile-web","private":true,"dependencies":{},"dsh":{"profile":{"bundles":[]}}}' \
+		> "$PROFILE_DIR/package.json"
+	echo "bootstrap: created empty profile at $PROFILE_DIR"
 fi
 
 # Caddyfile は毎回イメージ同梱の種から作り直す（コンテナ内なので永続化不要）。

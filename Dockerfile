@@ -53,12 +53,8 @@ WORKDIR /root/workspace
 
 # Caddyfile は「種」として置く。実体の /etc/caddy/Caddyfile は起動のたびに
 # entrypoint が種から作り、bootstrap.js が cookie 行を足す。
-# 人格 preset（ヘルタ・人形7体・ルアン・メェイ）と運用ルール。
-# 起動時に既存の profile patch が無ければここから複製する。あれば触らない
-# （ユーザーの編集を上書きしないため）。
-COPY dsh/cordis.patch.yml /opt/dsh/presets/cordis.patch.yml
-COPY dsh/AGENTS.md /opt/dsh/presets/AGENTS.md
-COPY dsh/pnpm-workspace.yaml /opt/dsh/presets/pnpm-workspace.yaml
+# 人格 preset や AGENTS.md、プラグインの一覧は焼き込まない（バニラの dsh）。
+# 設定・拡張はすべて UI から入れる。
 
 COPY Caddyfile /etc/caddy/Caddyfile.dsh
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
