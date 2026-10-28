@@ -63,15 +63,23 @@ fi
 
 export PATH="$DSH_RUNTIME/node_modules/.bin:$PATH"
 
-# 人格 preset と運用ルールを初回だけ配る。
-# profile が既にあるなら（= 一度起動済みなら）ユーザーの編集を尊重して触らない。
-# 入れ直したいときは DSH_PROFILE_RESET=1 で起動する。
+# 人格 preset ・運用ルール・profile の package.json をイメージから配る。
+# 中身が違うときだけ上書きする（冪等）。DSH_PROFILE_RESET=1 なら既存を捨てて入れ直す。
+#
+# 以前は「既存があれば触らない」だったが、それだとイメージを更新しても実体の
+# 設定は初回のまま据え置かれ、新しい preset もプラグイン一覧も反映されないまま
+# 静かにずれる（実際に web-ui-pet が効かず 403 を 5 秒おきに叩き続けた）。
+# 実体で編集したくなったらイメージ側を直してビルドする。
 PROFILE_DIR="$DSH_HOME/profiles/web"
 mkdir -p "$PROFILE_DIR"
-if [ "$DSH_PROFILE_RESET" = "1" ] || [ ! -s "$PROFILE_DIR/cordis.patch.yml" ]; then
-	cp /opt/dsh/presets/cordis.patch.yml "$PROFILE_DIR/cordis.patch.yml"
-	echo "bootstrap: installed agent presets into $PROFILE_DIR"
-fi
+sync_preset() {  # $1=src $2=dst
+	if [ "$DSH_PROFILE_RESET" = "1" ] || ! cmp -s "$1" "$2"; then
+		cp "$1" "$2"
+		echo "bootstrap: synced $(basename "$2") into $(dirname "$2")"
+	fi
+}
+sync_preset /opt/dsh/presets/cordis.patch.yml "$PROFILE_DIR/cordis.patch.yml"
+sync_preset /opt/dsh/presets/package.json "$PROFILE_DIR/package.json"
 
 # dsh-plugin add はプロファイル側の pnpm-workspace.yaml でビルドスクリプトを
 # 許可する。無いと dsh-web-all（cloudflared/ssh2/cpu-features）の初回 add が
@@ -122,15 +130,30 @@ fi
 
 cd /root/workspace
 
-# モバイル UI の崩れ（設定モーダルが 948px 固定で画面外、左サイドバーの下部
-# アイコンに触れない、ヘッダのロゴが本文に被る）は上流 CSS が原因。自前 CSS を
-# 差し込む手もあるが、上流の変更に追従できず実機で直りきらなかったので
-# dsh-mobile-upgrade に任せる。プロファイルに一度入れば永続するが、新規
-# プロファイルでは必要なので冪等に入れる。
-if [ -s "$PROFILE_DIR/package.json" ] && ! grep -q 'dsh-mobile-upgrade' "$PROFILE_DIR/package.json"; then
-	echo "bootstrap: installing dsh-mobile-upgrade"
-	dsh plugin --profile web add dsh-mobile-upgrade \
-		> /tmp/mobile-upgrade.log 2>&1 || echo "bootstrap: dsh-mobile-upgrade install failed"
+# manifest（dsh/profile-package.json）と実体の依存がずれていたら、プロファイルに
+# 入れる。-plugin の add/remove は pnpm を回すので、必要なときだけ実行する。
+# （dsh は bundles と node_modules の両方を見るので、片方だけ直しても効かない）
+if [ -s "$PROFILE_DIR/package.json" ]; then
+	MANIFEST_PKGS=$(node -p "Object.entries(require('/opt/dsh/presets/package.json').dependencies).map(([k,v])=>k+'@'+v).join(' ')" 2>/dev/null)
+	PROFILE_PKGS=$(node -p "Object.entries(require('$PROFILE_DIR/package.json').dependencies).map(([k,v])=>k+'@'+v).join(' ')" 2>/dev/null)
+	if [ "$MANIFEST_PKGS" != "$PROFILE_PKGS" ]; then
+		echo "bootstrap: profile dependencies differ from manifest, syncing"
+		for spec in $MANIFEST_PKGS; do
+			case " $PROFILE_PKGS " in
+				*" $spec "*) ;;
+				*) dsh plugin --profile web add "$spec" >> /tmp/plugin-sync.log 2>&1 \
+				     || echo "bootstrap: failed to add $spec (see /tmp/plugin-sync.log)";;
+			esac
+		done
+		for spec in $PROFILE_PKGS; do
+			name=${spec%@*}
+			case " $MANIFEST_PKGS " in
+				*" $name@"*) ;;
+				*) dsh plugin --profile web remove "$name" >> /tmp/plugin-sync.log 2>&1 \
+				     || echo "bootstrap: failed to remove $name (see /tmp/plugin-sync.log)";;
+			esac
+		done
+	fi
 fi
 
 # Caddyfile は毎回イメージ同梱の種から作り直す（コンテナ内なので永続化不要）。

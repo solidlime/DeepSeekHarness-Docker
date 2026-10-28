@@ -3,12 +3,20 @@
   "private": true,
   "allowScripts": [
     "@deepseek-ai/dsh-subprocess-local",
+    "dsh-better-sidebar",
+    "ds-bot",
     "koffi",
     "node-pty",
     "@google/genai",
     "protobufjs"
   ],
   "dependencies": {
-    "@deepseek-ai/dsh": "0.2.1-rc.4"
+    "@deepseek-ai/dsh": "0.2.1-rc.4",
+    "@linxin666/dsh-web-all": "^0.4.11",
+    "@openviking/dsh-memory-plugin": "^0.5.30",
+    "ds-bot": "0.2.3",
+    "dsh-better-sidebar": "0.28.2",
+    "dsh-mobile-upgrade": "^0.8.11",
+    "dshmarket": "^1.73.1"
   }
 }

@@ -1356,13 +1356,10 @@
 - id: web-ui-remote-web-ui
   disabled: true
 
-# dsh-pet（デスクトップマスコット）は position: fixed で会話の上に重なる。
-# 幅の狭いスマホではメッセージを隠すので無効化する。
-- id: dsh-pet
-  disabled: true
 
-# dsh-web-all バンドルが内蔵する別バッケージ。上の dsh-pet とは別 id なので
-# 併せて止めないとクライアントが 5 秒ごとに /api/pet/* を 403 で叩き続ける。
+# dsh-web-all が依存として抱えている @linxin666/dsh-pet。物理的に消せない
+# （バンドルの依存ツリーの内側にある）ので、id を指定して無効化する。
+# 止めないとクライアントが 5 秒ごとに /api/pet/* を叩き続ける。
+# 独立パッケージの dsh-pet（別物）は profile 側の依存から外してある。
 - id: web-ui-pet
   disabled: true
-
