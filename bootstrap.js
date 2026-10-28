@@ -75,9 +75,13 @@ function caddyfile(base, authority, cookie) {
 		// ループバック限定のルート。プロキシ越しだと Host が nas:3080 になり、
 		// X-Forwarded-* も付くので弾かれる。認証は下の Cookie 注入で済んでいるため、
 		// これらのパスだけ見かけ上ループバックとして中継する。
-		//   /api/dsh-browser-view/*  dsh-client-ui-browser-view（パネルが Connecting で止まる）
-		//   /api/dsh-usage/*          dsh-usage（Usage Statistics が 403 forbidden: loopback-only）
-		'\t@loopbackFenced path /api/dsh-browser-view/* /api/dsh-usage/*',
+		//   /api/dsh-browser-view/*     dsh-client-ui-browser-view（パネルが Connecting で止まる）
+		//   /api/dsh-usage/*            dsh-usage（Usage Statistics が 403 forbidden: loopback-only）
+		//   /api/dsh-web-ui-settings/*  dsh-client-ui-web-ui-settings（設定画面が読めない）
+		//   /api/dsh-session-archive*   dsh-session-archive（Session Archive Manager が 403）
+		// ここには入れないもの: /api/pair。ペアリングコードは「そのマシンでしか読めない」
+		// のが設計で、LAN から読めたら誰でもデバイス登録できてしまう。
+		'\t@loopbackFenced path /api/dsh-browser-view/* /api/dsh-usage/* /api/dsh-web-ui-settings/* /api/dsh-session-archive*',
 		'\thandle @loopbackFenced {',
 		'\t\treverse_proxy 127.0.0.1:3081 {',
 		'\t\t\theader_up Host 127.0.0.1:3081',
