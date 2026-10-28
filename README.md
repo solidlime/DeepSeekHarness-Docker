@@ -171,13 +171,22 @@ dsh のモデルは、 NAS で動いている LiteLLM（`nas:4000`）に相乗�
 | --- | --- |
 | 設定場所 | `$DSH_HOME/settings.yaml` の ns `llm-pi-ai`（UI の Models 画面） |
 | 旧場所 | profile の `cordis.patch.yml` の `- id: llm-pi-ai`（起動時に settings.yaml へ移行される） |
-| 接続先 | `DSH_LITELLM_URL`（既定 `http://192.168.176.1:4000/v1`） |
-| 鍵 | `DSH_LITELLM_KEY`（`.env` で渡す） |
+| 接続先 | `DSH_LITELLM_URL`（既定 `http://host.docker.internal:4000/v1`） |
+| 鍵 | `DSH_LITELLM_KEY`（`.env` で渡し、`apiKeyEnv` も同じ名前にする） |
 | 既定モデル | `agent-default-model` で `General` |
 
-- `192.168.176.1` は NAS の **docker bridge gateway**（= ホスト自身）。
-  dsh コンテナから `nas:4000` は解決できても届かない（ネットワーク分離）。
-  ホスト IP が違う環境では `.env` の `DSH_LITELLM_URL` で上書きする。
+- `host.docker.internal` は daemon が注入する（NAS 側で `--host-gateway-ip` を設定済み）。
+  `/etc/hosts` に `172.17.0.1  host.docker.internal` が入るので、**bridge ネットワークを
+  作り直してサブネットが変わっても追従する**。以前は gateway IP を直書きしていたため、
+  bridge 再作成で LiteLLM に届かなくなった。
+- `nas:4000` は解決できても届かない（Docker の内側から LAN の名前は引けても
+  NAS 自身の IP へはルーティングされない）。必ず gateway 経由にする。
+- **`apiKeyEnv` は `.credentials.yaml` の `refs:` に書いた名前と完全に一致させる**。
+  `apiKeyEnv: LITELLM_MASTER_KEY` になっていると `refs: DSH_LITELLM_KEY` とは別物と
+  みなされ、モデルを選んだ瞬間に
+  `llm-pi-ai: no credential for provider route "litellm"; its profile resolves
+  LITELLM_MASTER_KEY, which is not set`（コード `MISSING_CREDENTIAL`）で失敗する。
+  UI の Models 画面から保存すると上書きされるので、直したら `settings.yaml` を確認する。
 - LiteLLM のモデル名（`Orchestrator` / `Advisor` / `Plan` / `Fixer` /
   `Designer` / `Explore` / `Librarian` / `General` / `Free`）をそのまま
   `models:` に並べている。LiteLLM 側で増やしたらここにも足す。
