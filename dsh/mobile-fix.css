@@ -1,0 +1,45 @@
+/* モバイル (<768px) の崩れを直す応急処置。上流が直ったら消す。
+ *
+ * dsh 本体（@deepseek-ai/dsh-web-frontend）はデスクトップ前提の固定幅で
+ * 組まれていて、スマホでは次の 2 つが壊れる。
+ *   1. 左サイドバー: viewport より高くなり、下端のアイコンが押せない
+ *   2. 設定モーダル: 9xx px 固定幅で画面からはみ出し、ラベルが 1 文字ずつ折り返す
+ *
+ * クラス名はビルドハッシュ付き（例 uV2eYG_root）なので前方一致で当てる。
+ * 上流がクラス名を変えたら当たらなくなるだけで、他への影響はない。
+ *
+ * 注意: dsh 側は content-box 前提で幅を組んでいるので、box-sizing を
+ * border-box に揃えないと 100vw + padding ではみ出したままになる。
+ */
+@media (max-width: 768px) {
+	/* 1. 左サイドバー: 下端のアイコンが画面外に出るのを止める。 */
+	[class*="hHd-Xa_root"] {
+		top: 0 !important;
+		height: 100dvh !important;
+		max-height: 100dvh !important;
+		display: flex !important;
+		flex-direction: column !important;
+	}
+	[class*="hHd-Xa_panelList"] {
+		flex: 1 1 auto !important;
+		min-height: 0 !important;
+		overflow-y: auto !important;
+	}
+
+	/* 2. 設定モーダル: はみ出しを止め、2 カラムを縦積みにする。 */
+	[class*="uV2eYG_"] {
+		box-sizing: border-box !important;
+		min-width: 0 !important;
+		grid-template-columns: 1fr !important;
+		flex-wrap: wrap !important;
+	}
+	[class*="uV2eYG_root"] {
+		width: 100vw !important;
+		max-width: 100vw !important;
+		height: 100dvh !important;
+		max-height: 100dvh !important;
+		display: flex !important;
+		flex-direction: column !important;
+		overflow-y: auto !important;
+	}
+}

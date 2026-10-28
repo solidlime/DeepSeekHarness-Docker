@@ -122,6 +122,21 @@ fi
 
 cd /root/workspace
 
+# モバイル崩れの応急処置 CSS を <link> で読ませる。
+# dsh 本体の index.html は $DSH_RUNTIME 側にあり、npm install で入れ替わるので
+# イメージに焼けない。毎回ここで差し込む。冪等（既に在れば何もしない）。
+# 上流が直ったら dsh/mobile-fix.css とこのブロックを消せばよい。
+MOBILE_FIX_HTML="$DSH_RUNTIME/node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html"
+if [ -f "$MOBILE_FIX_HTML" ] && ! grep -q 'dsh-mobile-fix.css' "$MOBILE_FIX_HTML"; then
+	node -e '
+		const fs = require("node:fs");
+		const p = process.argv[1];
+		const tag = "    <link rel=\"stylesheet\" href=\"/dsh-mobile-fix.css\" />\n";
+		fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace("</head>", tag + "  </head>"));
+	' "$MOBILE_FIX_HTML"
+	echo "bootstrap: injected mobile-fix stylesheet into index.html"
+fi
+
 # Caddyfile は毎回イメージ同梱の種から作り直す（コンテナ内なので永続化不要）。
 # cookie 行は bootstrap.js が起動時に書き足す。
 cp /etc/caddy/Caddyfile.dsh /etc/caddy/Caddyfile
