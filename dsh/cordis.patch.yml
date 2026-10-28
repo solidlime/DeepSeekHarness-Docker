@@ -1361,3 +1361,8 @@
 - id: dsh-pet
   disabled: true
 
+# dsh-web-all バンドルが内蔵する別バッケージ。上の dsh-pet とは別 id なので
+# 併せて止めないとクライアントが 5 秒ごとに /api/pet/* を 403 で叩き続ける。
+- id: web-ui-pet
+  disabled: true
+
