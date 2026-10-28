@@ -119,32 +119,29 @@ DSH_RUNTIME_REFRESH=1 docker compose up -d --force-recreate
 `DSH_RUNTIME_REFRESH=1` は一度きりなので、終わったら `0` に戻す
 （`.env` に入れると毎回インストールしてしまう）。
 
-## エージェントプリセット（人格の移植）
+## 設定は UI で入れる（イメージはバニラ）
 
-`dsh/presets/` と `dsh/profile-package.json` をイメージに焼き込み、起動時に profile と `$DSH_HOME` へ配る。
+イメージには **dsh 本体と実行環境（node / pnpm / caddy / chromium）だけ**を入れる。
+プリセット（人格）、`AGENTS.md`、プラグインの一覧は**焼き込まない**。設定も拡張も
+`$DSH_HOME` 配下に UI から入れたものがそのまま残る（`/root` ごと永続化しているため）。
 
-| 焼き込み先 | 配り先 | 中身 |
-| --- | --- | --- |
-| `dsh/presets/cordis.patch.yml` | `$DSH_HOME/profiles/web/cordis.patch.yml` | 8 体の preset（ヘルタ・人形#001/#002/#009/#011/#042/#057・ルアン・メェイ） |
-| `dsh/profile-package.json` | `$DSH_HOME/profiles/web/package.json` | プラグインの一覧（bundles と dependencies） |
-| `dsh/presets/AGENTS.md` | `$DSH_HOME/AGENTS.md` | 運用ルールのみ（人格は preset 側の `persona.prefix`） |
+| 中身 | 場所 |
+| --- | --- |
+| プロファイル（plugin 一覧・patch） | `$DSH_HOME/profiles/web/` |
+| 運用ルール・人格 | `$DSH_HOME/AGENTS.md` |
+| ブラウザの実体 | `$DSH_HOME/browsers/` |
 
-同期の規則は `.image-sha` ファイルで判定する。イメージの中身が変わったときだけ
-上書きし、GUI でした一行の編集は残す。以前は「既にあれば触らない」だったため、
-イメージを新しくしても実体が古いまま静かにずれていた（`web-ui-pet` の無効化が
-これで効かなかった）。
+- entrypoint はプロファイルが空のときだけ雛形の `package.json` を作る。既にあれば触らない。
+- イメージを更新しても設定とプラグインは引き継がれる。
+- どうしても初期化したいときは、そのディレクトリを自分で消してから起動する。
 
-- 上書きしたときは `*.bak-<epoch>` を隣に残す。
-- どうしても初期化したいときは `DSH_PROFILE_RESET=1` で起動する。
-- プラグインを足し引きしたときは `dsh/profile-package.json` も直す。起動時に
-  差分があれば `pnpm install` が 1 回走る（以前は `dsh plugin add` を
-  パッケージごとに実行していて、その都度 dsh が起動し ENOENT を吐いていた）。
+### preset（人格）を書くときの規則
 
 - preset は `cordis.patch.yml` の**トップレベル配列のエントリ**として書く。
   `presets:` のような専用キーは存在せず、書いても静かに無視される（実測）。
-- 人格は `persona.prefix` に入れる。`AGENTS.md` に人格を書くと preset 切り替えと二重になる。
+- 人格は `persona.prefix` に入れる。
 
-### ds-bot のボットへ人格を配る（`scripts/sync-bots.js`）
+## ds-bot のボットへ人格を配る（`scripts/sync-bots.js`）
 
 ds-bot の各ボットは**作成時の `instructions` を固定で持ち、preset とは連動しない**。
 そのため pi 側の人格を変えても ds-bot には伝わらない。`scripts/sync-bots.js` が橋渡しをする。
@@ -163,6 +160,7 @@ docker exec dsh node /root/.dsh/source/sync-bots.js --apply   # 書き込む
 - cookie は `.credentials.yaml` のブラウザセッション鍵から自分で作る。
   ポートに閉じた API（`127.0.0.1:3081`）を叩くだけなので、外に資格情報を出さない。
 - ボットを**新規作成**したときは、先に preset 名で作っておけば次回の同期で拾われる。
+- `scripts/` は repo に置いてあるが、コンテナへは手動で置く（イメージには入らない）。
 
 ## モデル（LiteLLM ゲートウェイ）
 
@@ -171,7 +169,8 @@ dsh のモデルは、 NAS で動いている LiteLLM（`nas:4000`）に相乗�
 
 | 項目 | 値 |
 | --- | --- |
-| 設定場所 | `dsh/presets/cordis.patch.yml` の `- id: llm-pi-ai` エントリ |
+| 設定場所 | `$DSH_HOME/settings.yaml` の ns `llm-pi-ai`（UI の Models 画面） |
+| 旧場所 | profile の `cordis.patch.yml` の `- id: llm-pi-ai`（起動時に settings.yaml へ移行される） |
 | 接続先 | `DSH_LITELLM_URL`（既定 `http://192.168.176.1:4000/v1`） |
 | 鍵 | `DSH_LITELLM_KEY`（`.env` で渡す） |
 | 既定モデル | `agent-default-model` で `General` |
