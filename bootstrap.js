@@ -89,12 +89,20 @@ function caddyfile(base, authority, cookie) {
 		// クライアントの cookie は捨てて、こちらで作ったもので置き換える。
 		// 残すと、古い cookie を持つ端末だけが 401 になる差が出る。
 		`\t\t\theader_up Cookie "${cookie.name}=${cookie.value}"`,
+		// dsh は起動に 60 秒前後かかる。その間 upstream は connection refused なので、
+		// 既定だと Caddy が即 502 を返し、起動直後に開いた端末が真っ白になる。
+		// 30 秒までは繋ぎ直しを試み、それでも駄目なら 502 を返す。
+		'\t\t\tlb_try_duration 30s',
+		'\t\t\tlb_try_interval 1s',
 		'\t\t}',
 		'\t}',
 		'\thandle {',
 		'\t\treverse_proxy 127.0.0.1:3081 {',
 		'\t\theader_up Host {http.request.hostport}',
 		`\t\theader_up Cookie "${cookie.name}=${cookie.value}"`,
+		// 上の分岐と同じ理由。dsh の起動待ちで即 502 を返さない。
+		'\t\t\tlb_try_duration 30s',
+		'\t\t\tlb_try_interval 1s',
 		'\t}',
 		'}',
 		'',
