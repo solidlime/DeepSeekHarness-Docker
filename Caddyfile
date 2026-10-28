@@ -12,14 +12,6 @@
 # ==== dsh bootstrap ====
 # このセクションは bootstrap.js が起動のたびに書き換える（手で編集しない）。
 :3080 {
-	# モバイル崩れの応急処置 CSS。index.html には entrypoint が <link> を差し込む。
-	# dsh 本体はデスクトップ幅固定で、スマホだとサイドバー下端と設定モーダルが壊れる。
-	@mobileFix path /dsh-mobile-fix.css
-	handle @mobileFix {
-		root * /usr/local/share/dsh-mobile-fix
-		file_server
-	}
-
 	reverse_proxy 127.0.0.1:3081 {
 		header_up Host {http.request.hostport}
 	}

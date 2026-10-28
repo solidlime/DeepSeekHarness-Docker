@@ -55,8 +55,8 @@ COPY dsh/AGENTS.md /opt/dsh/presets/AGENTS.md
 COPY dsh/pnpm-workspace.yaml /opt/dsh/presets/pnpm-workspace.yaml
 
 COPY Caddyfile /etc/caddy/Caddyfile.dsh
-# モバイル崩れの応急処置 CSS。Caddy が /dsh-mobile-fix.css として配信する。
-COPY dsh/mobile-fix.css /usr/local/share/dsh-mobile-fix/dsh-mobile-fix.css
+# モバイル崩れの応急処置 CSS。bootstrap.js が Caddyfile に埋め込む。
+COPY dsh/mobile-fix.css /opt/dsh/dsh-mobile-fix.css
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY bootstrap.js /usr/local/bin/bootstrap.js
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
