@@ -72,15 +72,6 @@ function caddyfile(base, authority, cookie) {
 		`# このセクションは bootstrap.js が起動のたびに書き換える（手で編集しない）。`,
 		`# 守りは LAN 限定（ポート転送しないこと）。パスキー/mTLS はこのブロックの前に差し込む。`,
 		site + ' {',
-		// モバイル崩れの応急処置 CSS。index.html には entrypoint が <link> を差し込む。
-		// file_server の root + request path を実ファイル名と合わせること。
-		'\t@mobileFix path /dsh-mobile-fix.css',
-		'\thandle @mobileFix {',
-		// ETag 付きで返るとブラウザが古い本文を使うことがある（実際に嵌まった）。
-		'\t\theader Cache-Control "no-store, must-revalidate"',
-		'\t\troot * /opt/dsh',
-		'\t\tfile_server',
-		'\t}',
 		'\t@browserView path /api/dsh-browser-view/*',
 		'\thandle @browserView {',
 		'\t\treverse_proxy 127.0.0.1:3081 {',
@@ -139,8 +130,6 @@ function selftest() {
 	const cf = caddyfile('{"apps":{}}\n' + MARKER + '\n:3080 {\n\tfile_server\n}\n', 'nas:3080', c);
 	// 共有 cookie を注入する（LAN 境界で守る）。クライアントの cookie は置き換える。
 	assert.ok(cf.includes(`header_up Cookie "${c.name}=${c.value}"`), 'shared cookie must be injected');
-	// モバイル修正 CSS は Caddyfile に本文ごと埋め込む（file_server を使わない）。
-	assert.ok(cf.includes('@mobileFix path /dsh-mobile-fix.css'), 'mobile fix route must exist');
 	assert.ok(cf.includes('header_up Host {http.request.hostport}'));
 	// ブラウザビューは loopback 前提で 403 を返すので、このパスだけ Host を差し替える。
 	assert.ok(cf.includes('header_up Host 127.0.0.1:3081'), 'browser view must look loopback to dsh');

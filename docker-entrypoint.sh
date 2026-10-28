@@ -122,23 +122,15 @@ fi
 
 cd /root/workspace
 
-# モバイル崩れの応急処置 CSS を <link> で読ませる。
-# dsh 本体の index.html は $DSH_RUNTIME 側にあり、npm install で入れ替わるので
-# イメージに焼けない。毎回ここで差し込む。冪等（既に在れば何もしない）。
-# 上流が直ったら dsh/mobile-fix.css とこのブロックを消せばよい。
-MOBILE_FIX_HTML="$DSH_RUNTIME/node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html"
-# DSH_MOBILE_FIX=0 でリンクごと外せる（上流が直ったとき用）。
-if [ "${DSH_MOBILE_FIX:-1}" = "1" ] && [ -f "$MOBILE_FIX_HTML" ] && ! grep -q 'dsh-mobile-fix.css' "$MOBILE_FIX_HTML"; then
-	node -e '
-		const fs = require("node:fs");
-		const p = process.argv[1];
-		// URL に cache-busting を入れる。Caddy は ETag を返し
-		// Cache-Control: no-store があってもブラウザが古い本文を使うことがある
-		// (Chrome の memory cache)。CSS を直しても反映されずに嵌まった。
-		const tag = "    <link rel=\"stylesheet\" href=\"/dsh-mobile-fix.css?v=3\" />\n";
-		fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace("</head>", tag + "  </head>"));
-	' "$MOBILE_FIX_HTML"
-	echo "bootstrap: injected mobile-fix stylesheet into index.html"
+# モバイル UI の崩れ（設定モーダルが 948px 固定で画面外、左サイドバーの下部
+# アイコンに触れない、ヘッダのロゴが本文に被る）は上流 CSS が原因。自前 CSS を
+# 差し込む手もあるが、上流の変更に追従できず実機で直りきらなかったので
+# dsh-mobile-upgrade に任せる。プロファイルに一度入れば永続するが、新規
+# プロファイルでは必要なので冪等に入れる。
+if [ -s "$PROFILE_DIR/package.json" ] && ! grep -q 'dsh-mobile-upgrade' "$PROFILE_DIR/package.json"; then
+	echo "bootstrap: installing dsh-mobile-upgrade"
+	dsh plugin --profile web add dsh-mobile-upgrade \
+		> /tmp/mobile-upgrade.log 2>&1 || echo "bootstrap: dsh-mobile-upgrade install failed"
 fi
 
 # Caddyfile は毎回イメージ同梱の種から作り直す（コンテナ内なので永続化不要）。
