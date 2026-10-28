@@ -50,6 +50,10 @@ WORKDIR /root/workspace
 # 人格 preset や AGENTS.md、プラグインの一覧は焼き込まない（バニラの dsh）。
 # 設定・拡張はすべて UI から入れる。
 
+# プラグイン構成の「種」。イメージには焼かず、プロファイルが空のときだけ
+# 複製する（既にあれば触らない = UI からの編集を上書きしない）。
+COPY dsh/profile-package.json /etc/dsh/profile-package.json
+
 COPY Caddyfile /etc/caddy/Caddyfile.dsh
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY bootstrap.js /usr/local/bin/bootstrap.js

@@ -102,14 +102,15 @@ fi
 
 cd /root/workspace
 
-# イメージはバニラの dsh だけを入れる。preset・AGENTS.md・プラグイン一覧は
-# 焼き込まないので、プロファイルが空ならここで作る。中身は UI から入れる。
+# イメージはバニラの dsh だけを入れる。preset・AGENTS.md は焼き込まない。
+# プラグイン構成だけは「種」から複製する（無いと web バンドルが無くて起動しないし、
+# ボリュームを作り直したときに同じ構成を再現できない）。既にあれば触らないので、
+# UI から入れた変更は残る。
 PROFILE_DIR="$DSH_HOME/profiles/web"
 if [ ! -s "$PROFILE_DIR/package.json" ]; then
 	mkdir -p "$PROFILE_DIR"
-	printf '%s\n' '{"name":"dsh-profile-web","private":true,"dependencies":{},"dsh":{"profile":{"bundles":[]}}}' \
-		> "$PROFILE_DIR/package.json"
-	echo "bootstrap: created empty profile at $PROFILE_DIR"
+	cp /etc/dsh/profile-package.json "$PROFILE_DIR/package.json"
+	echo "bootstrap: seeded profile from /etc/dsh/profile-package.json"
 fi
 
 # Caddyfile は毎回イメージ同梱の種から作り直す（コンテナ内なので永続化不要）。
