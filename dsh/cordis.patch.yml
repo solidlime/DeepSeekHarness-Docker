@@ -1355,3 +1355,9 @@
 # ペアリング要求は画面を塞ぐだけになる。remote-bridge は Task Board 連携に要るので残す。
 - id: web-ui-remote-web-ui
   disabled: true
+
+# dsh-pet（デスクトップマスコット）は position: fixed で会話の上に重なる。
+# 幅の狭いスマホではメッセージを隠すので無効化する。
+- id: dsh-pet
+  disabled: true
+
